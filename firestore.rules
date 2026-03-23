@@ -1,0 +1,140 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && (
+        (request.auth.token.email == "ernestvdavid@gmail.com" && request.auth.token.email_verified == true) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super')
+      );
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        (request.auth.token.email == "ernestvdavid@gmail.com" && request.auth.token.email_verified == true) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super' ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'school'))
+      );
+    }
+
+    function isSchoolAdmin(schoolId) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'school' &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.schoolId == schoolId;
+    }
+
+    function isTeacher(schoolId) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher' &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.schoolId == schoolId;
+    }
+
+    function isParent(schoolId) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'parent' &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.schoolId == schoolId;
+    }
+
+    function isSchoolActive(schoolId) {
+      return isSuperAdmin() || get(/databases/$(database)/documents/schools/$(schoolId)).data.status == 'Active';
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isSuperAdmin() || 
+                   (isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'school' && 
+                    resource.data.schoolId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.schoolId);
+      allow write: if isOwner(userId) || isSuperAdmin();
+    }
+
+    // Schools collection
+    match /schools/{schoolId} {
+      allow read: if true; // Allow public read for login page
+      allow write: if isSuperAdmin() || isSchoolAdmin(schoolId);
+
+      // Students subcollection
+      match /students/{studentId} {
+        allow read: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId) || isTeacher(schoolId) || 
+                     (isParent(schoolId) && request.auth.uid == resource.data.parentUid));
+        allow write: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId));
+      }
+
+      // Homework subcollection
+      match /homework/{homeworkId} {
+        allow read: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId) || isTeacher(schoolId) || isParent(schoolId));
+        allow write: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId) || isTeacher(schoolId));
+      }
+
+      // Events subcollection
+      match /events/{eventId} {
+        allow read: if isSchoolActive(schoolId); // Public events only if school is active
+        allow write: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId));
+      }
+
+      // Gallery subcollection
+      match /gallery/{galleryId} {
+        allow read: if isSchoolActive(schoolId); // Public gallery only if school is active
+        allow write: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId));
+      }
+
+      // Timetables subcollection
+      match /timetables/{timetableId} {
+        allow read: if isSchoolActive(schoolId);
+        allow write: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId) || isTeacher(schoolId));
+      }
+
+      // Date Sheets subcollection
+      match /datesheets/{datesheetId} {
+        allow read: if isSchoolActive(schoolId);
+        allow write: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId) || isTeacher(schoolId));
+      }
+    }
+    
+    // Audit logs
+    match /audit_logs/{logId} {
+      allow read: if isSuperAdmin() || (isAuthenticated() && 
+                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'school' &&
+                   resource.data.schoolId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.schoolId);
+      allow create: if isAuthenticated();
+    }
+    
+    // Timetables
+    match /timetables/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    // Date Sheets
+    match /datesheets/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // System Config
+    match /system_config/{id} {
+      allow read: if true; // Allow public read for maintenance mode check
+      allow write: if isSuperAdmin();
+    }
+  }
+}

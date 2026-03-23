@@ -1,0 +1,7 @@
+{
+  "name": "My School My Love",
+  "description": "A centralized education portal and school management system for Pakistan, featuring board results, admissions, and WhatsApp-integrated school administration.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

@@ -1,0 +1,102 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Represents a user in the system (Super Admin, School Admin, Teacher, Parent).",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["super", "school", "teacher", "parent"] },
+        "schoolId": { "type": "string", "description": "ID of the school the user belongs to" },
+        "name": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role", "name"]
+    },
+    "School": {
+      "title": "School",
+      "description": "Represents a school registered in the system.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "address": { "type": "string" },
+        "contact": { "type": "string" },
+        "plan": { "type": "string", "enum": ["free", "pro", "premium"] },
+        "status": { "type": "string", "enum": ["Active", "Suspended", "Pending"] },
+        "expiry": { "type": "string", "description": "ISO date string or 'N/A'" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "plan", "status"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "Represents a student in a school.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "schoolId": { "type": "string" },
+        "name": { "type": "string" },
+        "rollNo": { "type": "string" },
+        "classId": { "type": "string" },
+        "sectionId": { "type": "string" },
+        "parentUid": { "type": "string", "description": "UID of the parent user" }
+      },
+      "required": ["id", "schoolId", "name", "rollNo", "classId", "sectionId"]
+    },
+    "Homework": {
+      "title": "Homework",
+      "description": "Represents a homework or assignment task.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "schoolId": { "type": "string" },
+        "classId": { "type": "string" },
+        "sectionId": { "type": "string" },
+        "subject": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "dueDate": { "type": "string", "format": "date" },
+        "teacherId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "schoolId", "classId", "sectionId", "subject", "title", "dueDate"]
+    },
+    "Event": {
+      "title": "Event",
+      "description": "Represents a school event or notice.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "schoolId": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "type": { "type": "string", "enum": ["holiday", "event", "exam", "other"] }
+      },
+      "required": ["id", "schoolId", "title", "date", "type"]
+    },
+    "GalleryItem": {
+      "title": "Gallery Item",
+      "description": "Represents an image in the school gallery.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "schoolId": { "type": "string" },
+        "title": { "type": "string" },
+        "imageUrl": { "type": "string", "format": "uri" },
+        "date": { "type": "string", "format": "date" }
+      },
+      "required": ["id", "schoolId", "imageUrl"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": { "schema": "User", "description": "User profiles" },
+    "/schools/{schoolId}": { "schema": "School", "description": "School details" },
+    "/schools/{schoolId}/students/{studentId}": { "schema": "Student", "description": "Students in a school" },
+    "/schools/{schoolId}/homework/{homeworkId}": { "schema": "Homework", "description": "Homework tasks" },
+    "/schools/{schoolId}/events/{eventId}": { "schema": "Event", "description": "School events" },
+    "/schools/{schoolId}/gallery/{galleryId}": { "schema": "GalleryItem", "description": "School gallery items" }
+  }
+}
