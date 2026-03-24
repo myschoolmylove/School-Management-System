@@ -5,6 +5,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { db, auth } from "../firebase";
 import { doc, onSnapshot, collection } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+import { useNavigate } from "react-router-dom";
 import ClassModule from "@/src/components/ClassModule";
 import FinanceModule from "@/src/components/FinanceModule";
 import SchoolResultsModule from "@/src/components/SchoolResultsModule";
@@ -47,6 +48,7 @@ const sidebarItems = [
 
 export default function SchoolAdmin() {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("Overview");
   const [schoolStatus, setSchoolStatus] = useState<string>("Active");
   const [schoolData, setSchoolData] = useState<any>(null);
@@ -55,7 +57,7 @@ export default function SchoolAdmin() {
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (!user) {
-        window.location.href = "/login";
+        navigate("/login");
         return;
       }
     });
@@ -85,7 +87,12 @@ export default function SchoolAdmin() {
   const currentPlan = schoolData?.plan || "Free";
   const isFreeTier = currentPlan === "Free";
   const studentLimit = currentPlan === "Free" ? 50 : currentPlan === "Standard" ? 300 : 600;
-  const monthlyBill = studentCount * (currentPlan === "Standard" ? 50 : currentPlan === "Professional" ? 40 : 0);
+  
+  const discount = schoolData?.discount || 0;
+  const baseRate = currentPlan === "Standard" ? 50 : currentPlan === "Professional" ? 40 : 0;
+  const discountedRate = baseRate * (1 - discount / 100);
+  const calculatedBill = studentCount * discountedRate;
+  const monthlyPrice = schoolData?.monthlyPrice || calculatedBill;
 
   const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -467,9 +474,22 @@ export default function SchoolAdmin() {
               {studentCount} / {currentPlan === "Enterprise" ? "Unlimited" : studentLimit} Students
             </p>
             {currentPlan !== "Free" && currentPlan !== "Enterprise" && (
-              <p className="mt-2 text-[10px] font-bold text-emerald-400">
-                Est. Bill: Rs. {monthlyBill.toLocaleString()}
-              </p>
+              <div className="mt-2 space-y-1">
+                {schoolData?.monthlyPrice ? (
+                  <p className="text-[10px] font-bold text-emerald-400">
+                    Decided Price: Rs. {schoolData.monthlyPrice.toLocaleString()} / month
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-[10px] font-bold text-emerald-400">
+                      Rate: Rs. {discountedRate.toFixed(2)} / student
+                    </p>
+                    <p className="text-[10px] font-bold text-emerald-400">
+                      Est. Bill: Rs. {calculatedBill.toLocaleString()}
+                    </p>
+                  </>
+                )}
+              </div>
             )}
           </div>
         </div>

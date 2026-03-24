@@ -36,7 +36,8 @@ export default function SuperAdmin() {
     principal: "",
     email: "",
     password: "",
-    plan: "Free" as "Free" | "Standard" | "Professional" | "Enterprise"
+    plan: "Free" as "Free" | "Standard" | "Professional" | "Enterprise",
+    monthlyPrice: 0
   });
 
   const [systemConfig, setSystemConfig] = useState({
@@ -107,6 +108,7 @@ export default function SuperAdmin() {
         principal: newSchool.principal,
         email: newSchool.email,
         plan: newSchool.plan,
+        monthlyPrice: newSchool.monthlyPrice,
         status: "Active",
         students: 0,
         expiry: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -131,7 +133,7 @@ export default function SuperAdmin() {
       await signOut(secondaryAuth);
 
       setIsAddModalOpen(false);
-      setNewSchool({ name: "", principal: "", email: "", password: "", plan: "Free" });
+      setNewSchool({ name: "", principal: "", email: "", password: "", plan: "Free", monthlyPrice: 0 });
       alert("School and Admin account created successfully!");
     } catch (err: any) {
       console.error(err);
@@ -171,7 +173,8 @@ export default function SuperAdmin() {
       await updateDoc(doc(db, "schools", editingSchool.id), {
         expiry: editingSchool.expiry,
         plan: editingSchool.plan,
-        discount: editingSchool.discount || 0
+        discount: editingSchool.discount || 0,
+        monthlyPrice: editingSchool.monthlyPrice || 0
       });
       setIsEditLicenseModalOpen(false);
       setEditingSchool(null);
@@ -294,6 +297,17 @@ export default function SuperAdmin() {
                       <option value="Professional">Professional (Rs. 40 - Above 300 Students)</option>
                       <option value="Enterprise">Enterprise (Contact Sales)</option>
                     </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Monthly Price (Rs.)</label>
+                    <input 
+                      type="number" 
+                      required
+                      value={newSchool.monthlyPrice}
+                      onChange={e => setNewSchool({...newSchool, monthlyPrice: Number(e.target.value)})}
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      placeholder="e.g. 5000"
+                    />
                   </div>
                   {newSchool.plan === "Enterprise" ? (
                     <div className="rounded-xl bg-slate-50 p-4 text-center">
@@ -708,6 +722,16 @@ export default function SuperAdmin() {
                       onChange={(e) => setEditingSchool({...editingSchool, discount: parseInt(e.target.value) || 0})}
                       className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20" 
                       placeholder="e.g. 10"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Monthly Price (Rs.)</label>
+                    <input 
+                      type="number" 
+                      value={editingSchool?.monthlyPrice || 0} 
+                      onChange={(e) => setEditingSchool({...editingSchool, monthlyPrice: Number(e.target.value)})}
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20" 
+                      placeholder="e.g. 5000"
                     />
                   </div>
                   <div>
