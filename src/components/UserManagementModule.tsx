@@ -3,8 +3,9 @@ import { UserPlus, Shield, Mail, Trash2, RefreshCw, Plus, X, Lock } from "lucide
 import { cn } from "@/src/lib/utils";
 import { db, auth } from "../firebase";
 import { collection, query, where, onSnapshot, doc, setDoc, deleteDoc, updateDoc } from "firebase/firestore";
-import { createUserWithEmailAndPassword } from "firebase/auth";
+import { createUserWithEmailAndPassword, signOut } from "firebase/auth";
 import { logAction } from "../services/auditService";
+import { getSecondaryAuth } from "../lib/authUtils";
 
 const roles = ["admin", "registrar", "librarian", "finance", "teacher", "parent"];
 
@@ -21,6 +22,7 @@ interface StaffUser {
 export default function UserManagementModule({ schoolId }: { schoolId?: string }) {
   const [users, setUsers] = useState<StaffUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAdding, setIsAdding] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newStaff, setNewStaff] = useState({
     name: "",
@@ -53,6 +55,7 @@ export default function UserManagementModule({ schoolId }: { schoolId?: string }
   const handleAddStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!schoolId) return;
+    setIsAdding(true);
     try {
       // For Parent/Teacher, we might use a username instead of email
       let loginEmail = newStaff.email.trim();
@@ -61,14 +64,11 @@ export default function UserManagementModule({ schoolId }: { schoolId?: string }
         loginEmail = `${sanitizedUsername}@${schoolId}.${newStaff.role}.com`;
       }
 
-      // Note: In a real production app, creating users for others should be done via Cloud Functions
-      // to avoid signing out the current admin. For this demo, we'll use a simplified approach
-      // or assume the admin is creating these accounts.
-      
-      // For now, we'll just add the profile to Firestore. 
-      // In a real scenario, the admin would use a dedicated "Create User" function.
-      const tempId = Math.random().toString(36).substr(2, 9);
-      await setDoc(doc(db, "users", tempId), {
+      const secondaryAuth = getSecondaryAuth();
+      const userCredential = await createUserWithEmailAndPassword(secondaryAuth, loginEmail, newStaff.password || "Staff@123");
+      const uid = userCredential.user.uid;
+
+      await setDoc(doc(db, "users", uid), {
         name: newStaff.name,
         email: loginEmail,
         username: newStaff.isUsername ? newStaff.email : null,
@@ -77,6 +77,8 @@ export default function UserManagementModule({ schoolId }: { schoolId?: string }
         status: "active",
         createdAt: new Date().toISOString()
       });
+
+      await signOut(secondaryAuth);
 
       await logAction(
         "Created User Account",
@@ -87,9 +89,11 @@ export default function UserManagementModule({ schoolId }: { schoolId?: string }
       setIsModalOpen(false);
       setNewStaff({ name: "", email: "", password: "", role: "registrar", isUsername: false });
       alert(`${newStaff.role.charAt(0).toUpperCase() + newStaff.role.slice(1)} added successfully!`);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error adding user:", error);
-      alert("Failed to add user.");
+      alert(error.message || "Failed to add user.");
+    } finally {
+      setIsAdding(false);
     }
   };
 
@@ -288,9 +292,10 @@ export default function UserManagementModule({ schoolId }: { schoolId?: string }
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 rounded-xl bg-emerald-600 py-3 text-sm font-bold text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/20"
+                  disabled={isAdding}
+                  className="flex-1 rounded-xl bg-emerald-600 py-3 text-sm font-bold text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/20 disabled:opacity-50"
                 >
-                  Create Account
+                  {isAdding ? "Creating..." : "Create Account"}
                 </button>
               </div>
             </form>

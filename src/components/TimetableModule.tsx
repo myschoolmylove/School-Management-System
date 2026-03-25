@@ -10,7 +10,8 @@ import {
   Search,
   ChevronRight,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  X
 } from "lucide-react";
 import { db } from "../firebase";
 import { 
@@ -21,7 +22,10 @@ import {
   deleteDoc, 
   doc, 
   updateDoc,
-  serverTimestamp 
+  serverTimestamp,
+  getDoc,
+  setDoc,
+  orderBy
 } from "firebase/firestore";
 import { cn } from "../lib/utils";
 import { logAction } from "../services/auditService";
@@ -29,9 +33,11 @@ import { logAction } from "../services/auditService";
 interface TimetableEntry {
   id?: string;
   classId: string;
+  section?: string;
   day: string;
   subject: string;
-  teacher: string;
+  teacherId: string;
+  teacherName: string;
   startTime: string;
   endTime: string;
 }
@@ -39,6 +45,7 @@ interface TimetableEntry {
 interface DateSheetEntry {
   id?: string;
   classId: string;
+  section?: string;
   examName: string;
   subject: string;
   date: string;
@@ -46,30 +53,57 @@ interface DateSheetEntry {
   endTime: string;
 }
 
+interface Teacher {
+  id: string;
+  name: string;
+  subject: string;
+  assignedSubjects: string[];
+}
+
+const ALL_CLASSES = [
+  "Playgroup", "Nursery", "Prep",
+  "Class 1", "Class 2", "Class 3", "Class 4", "Class 5",
+  "Class 6", "Class 7", "Class 8", "Class 9", "Class 10",
+  "Class 11", "Class 12"
+];
+
+const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
 export default function TimetableModule({ schoolId }: { schoolId?: string }) {
   const [activeSubTab, setActiveSubTab] = useState<"Timetable" | "DateSheet">("Timetable");
   const [timetables, setTimetables] = useState<TimetableEntry[]>([]);
   const [dateSheets, setDateSheets] = useState<DateSheetEntry[]>([]);
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [timetableRange, setTimetableRange] = useState({ from: "", to: "" });
   
   // Form States
   const [formData, setFormData] = useState<any>({
     classId: "",
+    section: "",
     day: "Monday",
     subject: "",
-    teacher: "",
+    teacherId: "",
+    teacherName: "",
     startTime: "",
     endTime: "",
-    examName: "Final Term 2026",
+    examName: "Monthly Test",
     date: ""
   });
 
-  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-  const classes = ["Class 1", "Class 2", "Class 3", "Class 4", "Class 5", "Class 6", "Class 7", "Class 8", "Class 9", "Class 10"];
-
   useEffect(() => {
     if (!schoolId) return;
+
+    // Fetch Timetable Range
+    const fetchRange = async () => {
+      const rangeDoc = await getDoc(doc(db, "schools", schoolId, "config", "timetableRange"));
+      if (rangeDoc.exists()) {
+        setTimetableRange(rangeDoc.data() as any);
+      }
+    };
+    fetchRange();
+
     const qTimetable = query(collection(db, "schools", schoolId, "timetables"));
     const unsubscribeTimetable = onSnapshot(qTimetable, (snapshot) => {
       setTimetables(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimetableEntry)));
@@ -78,18 +112,58 @@ export default function TimetableModule({ schoolId }: { schoolId?: string }) {
     const qDateSheet = query(collection(db, "schools", schoolId, "datesheets"));
     const unsubscribeDateSheet = onSnapshot(qDateSheet, (snapshot) => {
       setDateSheets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DateSheetEntry)));
+    });
+
+    const qTeachers = query(collection(db, "schools", schoolId, "teachers"));
+    const unsubscribeTeachers = onSnapshot(qTeachers, (snapshot) => {
+      setTeachers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Teacher)));
       setLoading(false);
     });
 
     return () => {
       unsubscribeTimetable();
       unsubscribeDateSheet();
+      unsubscribeTeachers();
     };
   }, [schoolId]);
+
+  const handleUpdateRange = async () => {
+    if (!schoolId) return;
+    try {
+      await setDoc(doc(db, "schools", schoolId, "config", "timetableRange"), timetableRange);
+      alert("Timetable range updated!");
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const checkConflict = (entry: any) => {
+    if (activeSubTab !== "Timetable") return null;
+    
+    const conflict = timetables.find(t => 
+      t.day === entry.day && 
+      t.teacherId === entry.teacherId && 
+      t.id !== entry.id &&
+      ((entry.startTime >= t.startTime && entry.startTime < t.endTime) ||
+       (entry.endTime > t.startTime && entry.endTime <= t.endTime))
+    );
+
+    if (conflict) {
+      return `Conflict: Teacher ${entry.teacherName} is already assigned to ${conflict.classId} at this time.`;
+    }
+    return null;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!schoolId) return;
+
+    const conflictMsg = checkConflict(formData);
+    if (conflictMsg) {
+      alert(conflictMsg);
+      return;
+    }
+
     setLoading(true);
     try {
       const collectionName = activeSubTab === "Timetable" ? "timetables" : "datesheets";
@@ -108,12 +182,14 @@ export default function TimetableModule({ schoolId }: { schoolId?: string }) {
       setShowForm(false);
       setFormData({
         classId: "",
+        section: "",
         day: "Monday",
         subject: "",
-        teacher: "",
+        teacherId: "",
+        teacherName: "",
         startTime: "",
         endTime: "",
-        examName: "Final Term 2026",
+        examName: "Monthly Test",
         date: ""
       });
     } catch (error) {
@@ -135,11 +211,23 @@ export default function TimetableModule({ schoolId }: { schoolId?: string }) {
     }
   };
 
+  const handleTeacherChange = (teacherId: string) => {
+    const teacher = teachers.find(t => t.id === teacherId);
+    if (teacher) {
+      setFormData({
+        ...formData,
+        teacherId,
+        teacherName: teacher.name,
+        subject: teacher.subject || (teacher.assignedSubjects?.[0] || "")
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="text-2xl font-black text-slate-900">Academic Schedules</h3>
+          <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Academic Schedules</h3>
           <p className="text-sm font-medium text-slate-500">Manage school timetables and examination date sheets</p>
         </div>
         <div className="flex items-center gap-2 rounded-2xl bg-slate-100 p-1">
@@ -163,6 +251,42 @@ export default function TimetableModule({ schoolId }: { schoolId?: string }) {
           </button>
         </div>
       </div>
+
+      {activeSubTab === "Timetable" && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-wrap items-end gap-4">
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Valid From</label>
+              <input 
+                type="date" 
+                value={timetableRange.from}
+                onChange={(e) => setTimetableRange({ ...timetableRange, from: e.target.value })}
+                className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-bold focus:border-emerald-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Valid To</label>
+              <input 
+                type="date" 
+                value={timetableRange.to}
+                onChange={(e) => setTimetableRange({ ...timetableRange, to: e.target.value })}
+                className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-bold focus:border-emerald-500 focus:outline-none"
+              />
+            </div>
+            <button 
+              onClick={handleUpdateRange}
+              className="rounded-xl bg-slate-900 px-6 py-2 text-xs font-black uppercase tracking-widest text-white hover:bg-slate-800"
+            >
+              Update Range
+            </button>
+          </div>
+          {timetableRange.from && timetableRange.to && (
+            <p className="mt-4 text-xs font-bold text-emerald-600">
+              Current Timetable: {new Date(timetableRange.from).toLocaleDateString()} to {new Date(timetableRange.to).toLocaleDateString()}
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative flex-1 max-w-md">
@@ -189,7 +313,7 @@ export default function TimetableModule({ schoolId }: { schoolId?: string }) {
       ) : (
         <div className="grid gap-6">
           {activeSubTab === "Timetable" ? (
-            classes.map(cls => {
+            ALL_CLASSES.map(cls => {
               const classEntries = timetables.filter(t => t.classId === cls);
               if (classEntries.length === 0) return null;
               return (
@@ -205,6 +329,7 @@ export default function TimetableModule({ schoolId }: { schoolId?: string }) {
                       <thead className="bg-slate-50/50 text-[10px] font-black uppercase tracking-widest text-slate-400">
                         <tr>
                           <th className="px-6 py-3">Day</th>
+                          <th className="px-6 py-3">Section</th>
                           <th className="px-6 py-3">Subject</th>
                           <th className="px-6 py-3">Teacher</th>
                           <th className="px-6 py-3">Time</th>
@@ -212,7 +337,7 @@ export default function TimetableModule({ schoolId }: { schoolId?: string }) {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 text-sm">
-                        {days.map(day => {
+                        {DAYS.map(day => {
                           const dayEntries = classEntries.filter(e => e.day === day);
                           return dayEntries.map((entry, idx) => (
                             <tr key={entry.id} className="group hover:bg-slate-50/50 transition-colors">
@@ -221,8 +346,9 @@ export default function TimetableModule({ schoolId }: { schoolId?: string }) {
                                   {day}
                                 </td>
                               )}
+                              <td className="px-6 py-4 font-bold text-slate-500">{entry.section || "-"}</td>
                               <td className="px-6 py-4 font-bold text-slate-700">{entry.subject}</td>
-                              <td className="px-6 py-4 text-slate-500">{entry.teacher}</td>
+                              <td className="px-6 py-4 text-slate-500">{entry.teacherName}</td>
                               <td className="px-6 py-4 font-mono text-xs text-slate-500">
                                 {entry.startTime} - {entry.endTime}
                               </td>
@@ -244,20 +370,23 @@ export default function TimetableModule({ schoolId }: { schoolId?: string }) {
               );
             })
           ) : (
-            classes.map(cls => {
+            ALL_CLASSES.map(cls => {
               const classEntries = dateSheets.filter(t => t.classId === cls);
               if (classEntries.length === 0) return null;
               return (
                 <div key={cls} className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                   <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex items-center justify-between">
                     <h4 className="font-black text-slate-900 uppercase tracking-widest">{cls} Date Sheet</h4>
-                    <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-lg">Final Term 2026</span>
+                    <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-lg">
+                      {classEntries[0]?.examName || "Examination"}
+                    </span>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left">
                       <thead className="bg-slate-50/50 text-[10px] font-black uppercase tracking-widest text-slate-400">
                         <tr>
                           <th className="px-6 py-3">Date</th>
+                          <th className="px-6 py-3">Section</th>
                           <th className="px-6 py-3">Subject</th>
                           <th className="px-6 py-3">Time</th>
                           <th className="px-6 py-3 text-right">Actions</th>
@@ -269,6 +398,7 @@ export default function TimetableModule({ schoolId }: { schoolId?: string }) {
                             <td className="px-6 py-4 font-black text-slate-900">
                               {new Date(entry.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                             </td>
+                            <td className="px-6 py-4 font-bold text-slate-500">{entry.section || "-"}</td>
                             <td className="px-6 py-4 font-bold text-slate-700">{entry.subject}</td>
                             <td className="px-6 py-4 font-mono text-xs text-slate-500">
                               {entry.startTime} - {entry.endTime}
@@ -296,17 +426,17 @@ export default function TimetableModule({ schoolId }: { schoolId?: string }) {
       {/* Add Entry Modal */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-8 shadow-2xl">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="mb-6 flex items-center justify-between">
               <h3 className="text-xl font-black text-slate-900 uppercase tracking-widest">Add {activeSubTab} Entry</h3>
               <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600">
-                <Plus className="h-6 w-6 rotate-45" />
+                <X className="h-6 w-6" />
               </button>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
+                <div className="col-span-1">
                   <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Class</label>
                   <select
                     required
@@ -315,8 +445,19 @@ export default function TimetableModule({ schoolId }: { schoolId?: string }) {
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold focus:border-emerald-500 focus:outline-none"
                   >
                     <option value="">Select Class</option>
-                    {classes.map(c => <option key={c} value={c}>{c}</option>)}
+                    {ALL_CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
+                </div>
+
+                <div className="col-span-1">
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Section (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. A"
+                    value={formData.section}
+                    onChange={(e) => setFormData({ ...formData, section: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold focus:border-emerald-500 focus:outline-none"
+                  />
                 </div>
 
                 {activeSubTab === "Timetable" ? (
@@ -328,43 +469,73 @@ export default function TimetableModule({ schoolId }: { schoolId?: string }) {
                       onChange={(e) => setFormData({ ...formData, day: e.target.value })}
                       className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold focus:border-emerald-500 focus:outline-none"
                     >
-                      {days.map(d => <option key={d} value={d}>{d}</option>)}
+                      {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
                     </select>
                   </div>
                 ) : (
-                  <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Date</label>
-                    <input
-                      type="date"
-                      required
-                      value={formData.date}
-                      onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold focus:border-emerald-500 focus:outline-none"
-                    />
-                  </div>
+                  <>
+                    <div className="col-span-2">
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Exam Name</label>
+                      <select
+                        required
+                        value={formData.examName}
+                        onChange={(e) => setFormData({ ...formData, examName: e.target.value })}
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold focus:border-emerald-500 focus:outline-none"
+                      >
+                        <option value="Monthly Test">Monthly Test</option>
+                        <option value="Quarterly Exam">Quarterly Exam</option>
+                        <option value="Mid-Term Exam">Mid-Term Exam</option>
+                        <option value="Annual Exam">Annual Exam</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Date</label>
+                      <input
+                        type="date"
+                        required
+                        value={formData.date}
+                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold focus:border-emerald-500 focus:outline-none"
+                      />
+                    </div>
+                  </>
                 )}
 
-                <div>
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Subject</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Mathematics"
-                    value={formData.subject}
-                    onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold focus:border-emerald-500 focus:outline-none"
-                  />
-                </div>
-
-                {activeSubTab === "Timetable" && (
-                  <div className="col-span-2">
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Teacher</label>
+                {activeSubTab === "Timetable" ? (
+                  <>
+                    <div className="col-span-2">
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Teacher</label>
+                      <select
+                        required
+                        value={formData.teacherId}
+                        onChange={(e) => handleTeacherChange(e.target.value)}
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold focus:border-emerald-500 focus:outline-none"
+                      >
+                        <option value="">Select Teacher</option>
+                        {teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Subject</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Mathematics"
+                        value={formData.subject}
+                        onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold focus:border-emerald-500 focus:outline-none"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Subject</label>
                     <input
                       type="text"
                       required
-                      placeholder="e.g. Mr. Zahid"
-                      value={formData.teacher}
-                      onChange={(e) => setFormData({ ...formData, teacher: e.target.value })}
+                      placeholder="e.g. Mathematics"
+                      value={formData.subject}
+                      onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
                       className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold focus:border-emerald-500 focus:outline-none"
                     />
                   </div>

@@ -5,7 +5,18 @@ import { cn } from "@/src/lib/utils";
 
 export default function Home() {
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col relative">
+      {/* Floating WhatsApp Button */}
+      <a 
+        href="https://wa.me/923001234567" 
+        target="_blank" 
+        rel="noopener noreferrer"
+        className="fixed bottom-8 right-8 z-50 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500 text-white shadow-2xl shadow-emerald-500/40 transition-all hover:scale-110 active:scale-95"
+      >
+        <MessageCircle className="h-8 w-8" />
+        <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold border-2 border-white">1</span>
+      </a>
+
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-slate-900 py-24 text-white sm:py-32">
         <div className="absolute inset-0 z-0 opacity-20">
@@ -40,10 +51,22 @@ export default function Home() {
                 Check Results
               </Link>
               <Link
-                to="/admin"
+                to="/admissions"
                 className="rounded-full bg-white/10 px-8 py-3 text-base font-semibold text-white backdrop-blur-sm transition-colors hover:bg-white/20"
               >
-                For School Admins
+                Admissions
+              </Link>
+              <Link
+                to="/pricing"
+                className="rounded-full bg-white/10 px-8 py-3 text-base font-semibold text-white backdrop-blur-sm transition-colors hover:bg-white/20"
+              >
+                Pricing
+              </Link>
+              <Link
+                to="/login"
+                className="rounded-full bg-white/10 px-8 py-3 text-base font-semibold text-white backdrop-blur-sm transition-colors hover:bg-white/20"
+              >
+                Login
               </Link>
             </div>
           </motion.div>

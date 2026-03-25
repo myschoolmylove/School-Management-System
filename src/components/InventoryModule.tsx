@@ -1,107 +1,117 @@
-import React, { useState, useEffect } from "react";
-import { Package, Search, Filter, Plus, MoreVertical, Trash2, Edit2, AlertCircle, X } from "lucide-react";
-import { cn } from "@/src/lib/utils";
+import React, { useState, useEffect, FormEvent } from "react";
+import { Plus, Search, Filter, Download, Trash2, Edit2, Package, Archive, AlertTriangle, CheckCircle, X, Loader2 } from "lucide-react";
+import { cn } from "../lib/utils";
 import { db } from "../firebase";
-import { collection, query, onSnapshot, doc, setDoc, deleteDoc, addDoc } from "firebase/firestore";
+import { collection, query, onSnapshot, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, orderBy } from "firebase/firestore";
 import { logAction } from "../services/auditService";
 
-interface InventoryItem {
+interface Asset {
   id: string;
   name: string;
   category: string;
   quantity: number;
   condition: "New" | "Good" | "Fair" | "Poor";
-  lastUpdated: string;
+  location: string;
+  purchaseDate: string;
+  value: number;
 }
 
-const categories = ["Furniture", "Electronics", "Lab", "Sports", "Books", "Other"];
-
-export default function InventoryModule() {
-  const [items, setItems] = useState<InventoryItem[]>([]);
+export default function InventoryModule({ schoolId }: { schoolId?: string }) {
+  const [assets, setAssets] = useState<Asset[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [search, setSearch] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [newItem, setNewItem] = useState({
+  const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const [formData, setFormData] = useState({
     name: "",
     category: "Furniture",
-    quantity: 0,
-    condition: "Good" as const
+    quantity: "1",
+    condition: "New" as "New" | "Good" | "Fair" | "Poor",
+    location: "Main Building",
+    purchaseDate: new Date().toISOString().split('T')[0],
+    value: ""
   });
 
+  const categories = ["Furniture", "Electronics", "Sports", "Lab Equipment", "Books", "Vehicles", "Other"];
+  const conditions = ["New", "Good", "Fair", "Poor"];
+
   useEffect(() => {
-    const q = query(collection(db, "inventory"));
+    if (!schoolId) return;
+    const q = query(collection(db, "schools", schoolId, "inventory"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const itemList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as InventoryItem[];
-      setItems(itemList);
+      const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Asset[];
+      setAssets(list);
       setIsLoading(false);
     });
     return () => unsubscribe();
-  }, []);
+  }, [schoolId]);
 
-  const handleAddItem = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!schoolId) return;
+    setIsSaving(true);
+
     try {
-      await addDoc(collection(db, "inventory"), {
-        ...newItem,
-        lastUpdated: new Date().toISOString()
-      });
-      await logAction("Added Inventory Item", `${newItem.name} (${newItem.quantity})`, "inventory");
-      setIsModalOpen(false);
-      setNewItem({ name: "", category: "Furniture", quantity: 0, condition: "Good" });
-    } catch (error) {
-      console.error("Error adding item:", error);
-    }
-  };
+      const data = {
+        ...formData,
+        quantity: parseInt(formData.quantity),
+        value: parseFloat(formData.value),
+        updatedAt: serverTimestamp()
+      };
 
-  const handleDeleteItem = async (id: string, name: string) => {
-    if (window.confirm(`Delete ${name} from inventory?`)) {
-      try {
-        await deleteDoc(doc(db, "inventory", id));
-        await logAction("Deleted Inventory Item", name, "inventory");
-      } catch (error) {
-        console.error("Error deleting item:", error);
+      if (editingAsset) {
+        await updateDoc(doc(db, "schools", schoolId, "inventory", editingAsset.id), data);
+        await logAction("Update Inventory", `Updated inventory asset: ${formData.name}`, "inventory");
+      } else {
+        await addDoc(collection(db, "schools", schoolId, "inventory"), {
+          ...data,
+          createdAt: serverTimestamp()
+        });
+        await logAction("Add Inventory", `Added new inventory asset: ${formData.name}`, "inventory");
       }
+      setIsModalOpen(false);
+      setEditingAsset(null);
+      setFormData({ name: "", category: "Furniture", quantity: "1", condition: "New", location: "Main Building", purchaseDate: new Date().toISOString().split('T')[0], value: "" });
+    } catch (error) {
+      console.error("Error saving asset:", error);
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const filteredItems = items.filter(item => 
-    item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.category.toLowerCase().includes(searchTerm.toLowerCase())
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete this asset?")) return;
+    try {
+      await deleteDoc(doc(db, "schools", schoolId!, "inventory", id));
+      await logAction("Delete Inventory", `Deleted inventory asset ID: ${id}`, "inventory");
+    } catch (error) {
+      console.error("Error deleting asset:", error);
+    }
+  };
+
+  const filteredAssets = assets.filter(a => 
+    a.name.toLowerCase().includes(search.toLowerCase()) ||
+    a.category.toLowerCase().includes(search.toLowerCase())
   );
 
-  const stats = {
-    total: items.reduce((acc, item) => acc + item.quantity, 0),
-    electronics: items.filter(i => i.category === "Electronics").reduce((acc, i) => acc + i.quantity, 0),
-    poor: items.filter(i => i.condition === "Poor").length
-  };
+  const totalValue = assets.reduce((acc, a) => acc + a.value, 0);
+  const poorConditionCount = assets.filter(a => a.condition === "Poor").length;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-xl font-bold text-slate-900">Inventory Management</h3>
-          <p className="text-sm text-slate-500">Track school assets, furniture, and equipment.</p>
-        </div>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700"
-        >
-          <Plus className="h-4 w-4" /> Add Asset
-        </button>
-      </div>
-
+    <div className="space-y-8">
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
         {[
-          { label: "Total Assets", value: stats.total.toString(), icon: Package, color: "text-blue-600 bg-blue-50" },
-          { label: "Electronics", value: stats.electronics.toString(), icon: Package, color: "text-emerald-600 bg-emerald-50" },
-          { label: "Needs Repair", value: stats.poor.toString(), icon: AlertCircle, color: "text-rose-600 bg-rose-50" },
+          { label: "Total Assets", value: assets.length, icon: Package, color: "text-blue-600 bg-blue-50" },
+          { label: "Total Value", value: `Rs. ${totalValue.toLocaleString()}`, icon: Archive, color: "text-emerald-600 bg-emerald-50" },
+          { label: "Needs Maintenance", value: poorConditionCount, icon: AlertTriangle, color: "text-rose-600 bg-rose-50" },
         ].map((stat) => (
           <div key={stat.label} className="rounded-2xl border border-black/5 bg-white p-6 shadow-sm">
-            <div className={cn("rounded-xl p-2 w-fit", stat.color)}>
-              <stat.icon className="h-6 w-6" />
+            <div className="flex items-center justify-between">
+              <div className={cn("rounded-xl p-2", stat.color)}>
+                <stat.icon className="h-6 w-6" />
+              </div>
             </div>
             <p className="mt-4 text-sm font-medium text-slate-500">{stat.label}</p>
             <p className="mt-1 text-2xl font-bold text-slate-900">{stat.value}</p>
@@ -110,79 +120,75 @@ export default function InventoryModule() {
       </div>
 
       <div className="rounded-2xl border border-black/5 bg-white shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between border-b border-slate-50 p-6">
-          <h3 className="text-lg font-bold text-slate-900">Asset List</h3>
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search assets..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="rounded-lg border border-slate-200 bg-slate-50 py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-              />
-            </div>
-            <button className="rounded-lg border border-slate-200 p-2 text-slate-400 hover:bg-slate-50">
-              <Filter className="h-5 w-5" />
-            </button>
+        <div className="flex flex-col gap-4 border-b border-slate-50 p-6 md:flex-row md:items-center md:justify-between">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search inventory..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+            />
           </div>
+          <button 
+            onClick={() => {
+              setEditingAsset(null);
+              setFormData({ name: "", category: "Furniture", quantity: "1", condition: "New", location: "Main Building", purchaseDate: new Date().toISOString().split('T')[0], value: "" });
+              setIsModalOpen(true);
+            }}
+            className="flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-2.5 text-xs font-black uppercase tracking-widest text-white hover:bg-emerald-700"
+          >
+            <Plus className="h-4 w-4" /> Add Asset
+          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="bg-slate-50 text-xs font-bold uppercase tracking-wider text-slate-400">
+            <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-400">
               <tr>
                 <th className="px-6 py-4">Asset Name</th>
                 <th className="px-6 py-4">Category</th>
-                <th className="px-6 py-4">Quantity</th>
-                <th className="px-6 py-4">Condition</th>
-                <th className="px-6 py-4">Last Updated</th>
-                <th className="px-6 py-4">Actions</th>
+                <th className="px-6 py-4 text-center">Qty</th>
+                <th className="px-6 py-4 text-center">Condition</th>
+                <th className="px-6 py-4 text-right">Value</th>
+                <th className="px-6 py-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50 text-sm">
+            <tbody className="divide-y divide-slate-100 text-sm">
               {isLoading ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center">
-                    <div className="flex justify-center">
-                      <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
-                    </div>
-                  </td>
-                </tr>
-              ) : filteredItems.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
-                    No assets found in inventory.
-                  </td>
-                </tr>
+                <tr><td colSpan={6} className="py-10 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-emerald-500" /></td></tr>
+              ) : filteredAssets.length === 0 ? (
+                <tr><td colSpan={6} className="py-10 text-center text-slate-500">No assets found.</td></tr>
               ) : (
-                filteredItems.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-4 font-medium text-slate-900">{item.name}</td>
-                    <td className="px-6 py-4 text-slate-600">{item.category}</td>
-                    <td className="px-6 py-4 font-bold text-slate-900">{item.quantity}</td>
-                    <td className="px-6 py-4">
+                filteredAssets.map((a) => (
+                  <tr key={a.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-6 py-4 font-bold text-slate-900">{a.name}</td>
+                    <td className="px-6 py-4 text-slate-600">{a.category}</td>
+                    <td className="px-6 py-4 text-center font-bold text-slate-900">{a.quantity}</td>
+                    <td className="px-6 py-4 text-center">
                       <span className={cn(
-                        "rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider",
-                        item.condition === "New" ? "bg-emerald-50 text-emerald-600" :
-                        item.condition === "Good" ? "bg-blue-50 text-blue-600" :
-                        item.condition === "Fair" ? "bg-amber-50 text-amber-600" : "bg-rose-50 text-rose-600"
+                        "inline-block rounded-lg px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider",
+                        a.condition === "New" ? "bg-emerald-50 text-emerald-600" :
+                        a.condition === "Good" ? "bg-blue-50 text-blue-600" :
+                        a.condition === "Fair" ? "bg-amber-50 text-amber-600" : "bg-rose-50 text-rose-600"
                       )}>
-                        {item.condition}
+                        {a.condition}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-slate-500">
-                      {new Date(item.lastUpdated).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <button className="rounded-lg p-2 text-slate-400 hover:bg-slate-50 hover:text-emerald-600">
+                    <td className="px-6 py-4 text-right font-bold text-slate-900">Rs. {a.value.toLocaleString()}</td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex justify-end gap-2">
+                        <button 
+                          onClick={() => {
+                            setEditingAsset(a);
+                            setFormData({ name: a.name, category: a.category, quantity: a.quantity.toString(), condition: a.condition, location: a.location, purchaseDate: a.purchaseDate, value: a.value.toString() });
+                            setIsModalOpen(true);
+                          }}
+                          className="p-1 text-slate-400 hover:text-blue-600"
+                        >
                           <Edit2 className="h-4 w-4" />
                         </button>
-                        <button 
-                          onClick={() => handleDeleteItem(item.id, item.name)}
-                          className="rounded-lg p-2 text-slate-400 hover:bg-slate-50 hover:text-rose-600"
-                        >
+                        <button onClick={() => handleDelete(a.id)} className="p-1 text-slate-400 hover:text-rose-600">
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
@@ -195,88 +201,87 @@ export default function InventoryModule() {
         </div>
       </div>
 
-      {/* Add Asset Modal */}
+      {/* Add/Edit Asset Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xl font-bold text-slate-900">Add New Asset</h3>
-              <button onClick={() => setIsModalOpen(false)} className="rounded-full p-2 hover:bg-slate-100">
-                <X className="h-5 w-5 text-slate-400" />
-              </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-slate-900 uppercase tracking-tight">{editingAsset ? "Edit Asset" : "Add New Asset"}</h3>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
             </div>
-
-            <form onSubmit={handleAddItem} className="mt-6 space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="text-sm font-bold text-slate-700">Asset Name</label>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Asset Name</label>
                 <input
                   type="text"
                   required
-                  value={newItem.name}
-                  onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-                  className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-                  placeholder="e.g. Dell Latitude Laptop"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold focus:border-emerald-500 focus:outline-none"
+                  placeholder="e.g. Computer Lab PCs"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-bold text-slate-700">Category</label>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Category</label>
                   <select
-                    value={newItem.category}
-                    onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
-                    className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    value={formData.category}
+                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold focus:border-emerald-500 focus:outline-none"
                   >
-                    {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                    {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="text-sm font-bold text-slate-700">Quantity</label>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Quantity</label>
                   <input
                     type="number"
                     required
-                    min="0"
-                    value={newItem.quantity}
-                    onChange={(e) => setNewItem({ ...newItem, quantity: parseInt(e.target.value) })}
-                    className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    value={formData.quantity}
+                    onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold focus:border-emerald-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Condition</label>
+                  <select
+                    value={formData.condition}
+                    onChange={(e) => setFormData({ ...formData, condition: e.target.value as any })}
+                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold focus:border-emerald-500 focus:outline-none"
+                  >
+                    {conditions.map(cond => <option key={cond} value={cond}>{cond}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Value (Rs.)</label>
+                  <input
+                    type="number"
+                    required
+                    value={formData.value}
+                    onChange={(e) => setFormData({ ...formData, value: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold focus:border-emerald-500 focus:outline-none"
                   />
                 </div>
               </div>
               <div>
-                <label className="text-sm font-bold text-slate-700">Condition</label>
-                <div className="mt-2 flex gap-2">
-                  {["New", "Good", "Fair", "Poor"].map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => setNewItem({ ...newItem, condition: c as any })}
-                      className={cn(
-                        "flex-1 rounded-lg py-2 text-xs font-bold transition-all",
-                        newItem.condition === c 
-                          ? "bg-emerald-600 text-white shadow-md" 
-                          : "bg-slate-50 text-slate-500 hover:bg-slate-100"
-                      )}
-                    >
-                      {c}
-                    </button>
-                  ))}
-                </div>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Location</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.location}
+                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold focus:border-emerald-500 focus:outline-none"
+                  placeholder="e.g. Block A, Room 102"
+                />
               </div>
-
-              <div className="mt-8 flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-bold text-slate-600 hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 rounded-xl bg-emerald-600 py-3 text-sm font-bold text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/20"
-                >
-                  Save Asset
-                </button>
-              </div>
+              <button
+                disabled={isSaving}
+                className="w-full rounded-xl bg-slate-900 py-3 text-xs font-black uppercase tracking-widest text-white hover:bg-slate-800 disabled:opacity-50"
+              >
+                {isSaving ? <Loader2 className="mx-auto h-5 w-5 animate-spin" /> : editingAsset ? "Update Asset" : "Save Asset"}
+              </button>
             </form>
           </div>
         </div>

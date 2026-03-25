@@ -250,19 +250,37 @@ export default function Login() {
         <form className="mt-8 space-y-6" onSubmit={handleLogin}>
           <div className="space-y-4">
             {(role === "teacher" || role === "parent") && (
-              <div className="relative">
-                <School className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-                <select
-                  required
-                  value={selectedSchool}
-                  onChange={(e) => setSelectedSchool(e.target.value)}
-                  className="block w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-3 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 appearance-none"
-                >
-                  <option value="">Select your school</option>
-                  {schools.map((school) => (
-                    <option key={school.id} value={school.id}>{school.name}</option>
-                  ))}
-                </select>
+              <div className="space-y-2">
+                <div className="relative">
+                  <School className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                  <select
+                    required
+                    value={selectedSchool}
+                    onChange={(e) => setSelectedSchool(e.target.value)}
+                    className="block w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-3 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 appearance-none"
+                  >
+                    <option value="">Select your school</option>
+                    {schools.map((school) => (
+                      <option key={school.id} value={school.id}>{school.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="rounded-xl bg-emerald-50 p-3 text-[10px] font-medium text-emerald-700 space-y-1">
+                  <p className="font-bold uppercase tracking-wider">Login Instructions:</p>
+                  {role === "parent" ? (
+                    <>
+                      <p>• Select your child's school above.</p>
+                      <p>• Use child's <span className="font-bold">Roll Number</span> as username.</p>
+                      <p>• Default Password: <span className="font-bold">Parent@123</span></p>
+                    </>
+                  ) : (
+                    <>
+                      <p>• Select your school above.</p>
+                      <p>• Use your assigned <span className="font-bold">Username</span> or Email.</p>
+                      <p>• Default Password: <span className="font-bold">Teacher@123</span></p>
+                    </>
+                  )}
+                </div>
               </div>
             )}
             <div className="relative">
@@ -273,7 +291,7 @@ export default function Login() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="block w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-3 text-sm placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-                placeholder={role === "parent" ? "Username or Email" : "Email address"}
+                placeholder={role === "parent" ? "Roll Number or Username" : role === "teacher" ? "Username or Email" : "Email address"}
               />
             </div>
             <div className="relative">

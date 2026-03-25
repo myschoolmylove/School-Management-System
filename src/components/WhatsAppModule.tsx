@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { Smartphone, MessageCircle, Bell, Clock, CheckCircle, AlertCircle, Send, Settings, Search, Filter, X } from "lucide-react";
+import { Smartphone, MessageCircle, Bell, Clock, CheckCircle, AlertCircle, Send, Settings, Search, Filter, X, Bot, Zap, ExternalLink } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { db } from "../firebase";
-import { collection, query, onSnapshot, addDoc, orderBy, limit } from "firebase/firestore";
+import { collection, query, onSnapshot, addDoc, orderBy, limit, serverTimestamp } from "firebase/firestore";
 import { logAction } from "../services/auditService";
 
 interface WhatsAppAlert {
@@ -11,12 +11,13 @@ interface WhatsAppAlert {
   recipient: string;
   phone: string;
   status: "Sent" | "Delivered" | "Failed";
-  timestamp: string;
+  timestamp: any;
 }
 
 export default function WhatsAppModule() {
   const [alerts, setAlerts] = useState<WhatsAppAlert[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSending, setIsSending] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newMessage, setNewMessage] = useState({
@@ -39,24 +40,63 @@ export default function WhatsAppModule() {
     return () => unsubscribe();
   }, []);
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const sendViaAPI = async () => {
+    setIsSending(true);
     try {
-      // Simulate sending via API
+      const response = await fetch("/api/whatsapp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: newMessage.phone.replace(/\D/g, ""),
+          message: newMessage.content
+        })
+      });
+      
+      const result = await response.json();
+      
       await addDoc(collection(db, "whatsapp_logs"), {
         type: newMessage.type,
         recipient: newMessage.recipient,
         phone: newMessage.phone,
-        status: "Sent",
-        timestamp: new Date().toISOString()
+        status: result.success ? "Sent" : "Failed",
+        timestamp: serverTimestamp(),
+        apiResponse: result
       });
-      
-      await logAction("Sent WhatsApp Message", `To: ${newMessage.recipient}`, "whatsapp");
+
+      await logAction("Sent WhatsApp API Message", `To: ${newMessage.recipient}`, "whatsapp");
       setIsModalOpen(false);
       setNewMessage({ recipient: "", phone: "", type: "Manual Message", content: "" });
     } catch (error) {
-      console.error("Error sending message:", error);
+      console.error("Error sending API message:", error);
+      alert("Failed to send via API. Try WhatsApp Web instead.");
+    } finally {
+      setIsSending(false);
     }
+  };
+
+  const sendViaWhatsAppWeb = () => {
+    const cleanPhone = newMessage.phone.replace(/\D/g, "");
+    const encodedMsg = encodeURIComponent(newMessage.content);
+    const url = `https://web.whatsapp.com/send?phone=${cleanPhone}&text=${encodedMsg}`;
+    window.open(url, "_blank");
+    
+    // Still log it
+    addDoc(collection(db, "whatsapp_logs"), {
+      type: "WhatsApp Web",
+      recipient: newMessage.recipient,
+      phone: newMessage.phone,
+      status: "Sent",
+      timestamp: serverTimestamp()
+    });
+    
+    logAction("Sent WhatsApp Web Message", `To: ${newMessage.recipient}`, "whatsapp");
+    setIsModalOpen(false);
+  };
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    // Default to API if configured, otherwise show choice or just use API
+    await sendViaAPI();
   };
 
   const filteredAlerts = alerts.filter(a => 
@@ -113,6 +153,62 @@ export default function WhatsAppModule() {
           </div>
           <p className="mt-4 text-sm font-medium text-slate-500">Scheduled Alerts</p>
           <p className="mt-1 text-2xl font-bold text-slate-900">48</p>
+        </div>
+      </div>
+
+      {/* WhatsApp Bot Simulator */}
+      <div className="rounded-2xl border border-black/5 bg-slate-900 p-8 text-white shadow-xl">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="rounded-2xl bg-emerald-500 p-3">
+              <Bot className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold">WhatsApp AI Bot</h3>
+              <p className="text-sm text-slate-400">Automated responses for parents (Results, Fees, Attendance).</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 rounded-full bg-emerald-500/10 px-4 py-1.5 text-xs font-bold text-emerald-400 ring-1 ring-emerald-500/20">
+            <Zap className="h-3 w-3" />
+            AI ACTIVE
+          </div>
+        </div>
+
+        <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">
+          <div className="space-y-4">
+            <p className="text-xs font-black uppercase tracking-widest text-slate-500">Bot Commands</p>
+            {[
+              { cmd: "RESULT [RollNo]", desc: "Instantly sends latest exam result" },
+              { cmd: "FEE [RollNo]", desc: "Sends current month's fee status" },
+              { cmd: "ATTENDANCE [RollNo]", desc: "Sends attendance summary for current month" },
+            ].map((command) => (
+              <div key={command.cmd} className="flex items-center justify-between rounded-xl bg-white/5 p-4 border border-white/10">
+                <div>
+                  <code className="text-emerald-400 font-bold">{command.cmd}</code>
+                  <p className="text-xs text-slate-400 mt-1">{command.desc}</p>
+                </div>
+                <button className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-white">Edit</button>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-2xl bg-white/5 p-6 border border-white/10">
+            <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-4">Live Activity</p>
+            <div className="space-y-4">
+              {[
+                { user: "+92 300 1234567", msg: "RESULT 101", time: "2m ago" },
+                { user: "+92 301 7654321", msg: "FEE 101", time: "5m ago" },
+              ].map((log, i) => (
+                <div key={i} className="flex items-start gap-3 text-xs">
+                  <div className="h-2 w-2 mt-1.5 rounded-full bg-emerald-500" />
+                  <div className="flex-1">
+                    <p className="font-bold text-slate-300">{log.user}</p>
+                    <p className="text-slate-500 italic">"{log.msg}"</p>
+                  </div>
+                  <span className="text-[10px] text-slate-600">{log.time}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -211,7 +307,7 @@ export default function WhatsAppModule() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-slate-500">
-                      {new Date(alert.timestamp).toLocaleString()}
+                      {alert.timestamp?.toDate ? alert.timestamp.toDate().toLocaleString() : new Date(alert.timestamp).toLocaleString()}
                     </td>
                     <td className="px-6 py-4">
                       <button className="text-emerald-600 hover:underline">Resend</button>
@@ -270,19 +366,34 @@ export default function WhatsAppModule() {
                 />
               </div>
 
-              <div className="mt-8 flex gap-3">
+              <div className="mt-8 flex flex-col gap-3">
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={sendViaWhatsAppWeb}
+                    className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 py-3 text-sm font-bold text-emerald-700 hover:bg-emerald-100"
+                  >
+                    <ExternalLink className="h-4 w-4" /> WhatsApp Web
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSending}
+                    className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 text-sm font-bold text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/20 disabled:opacity-50"
+                  >
+                    {isSending ? (
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    ) : (
+                      <Zap className="h-4 w-4" />
+                    )}
+                    Send via API
+                  </button>
+                </div>
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-bold text-slate-600 hover:bg-slate-50"
+                  className="w-full rounded-xl border border-slate-200 py-3 text-sm font-bold text-slate-600 hover:bg-slate-50"
                 >
                   Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 rounded-xl bg-emerald-600 py-3 text-sm font-bold text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/20"
-                >
-                  Send Message
                 </button>
               </div>
             </form>

@@ -1,38 +1,41 @@
 import React, { useState, useEffect } from "react";
-import { Check, X, Search, Filter, MessageCircle, Calendar, Users, AlertCircle, Clock, CheckCircle } from "lucide-react";
+import { Check, X, Search, Filter, MessageCircle, Calendar, Users, AlertCircle, Clock, CheckCircle, Loader2 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { db } from "../firebase";
-import { collection, query, where, onSnapshot, doc, setDoc, serverTimestamp } from "firebase/firestore";
-
-const initialStudents = [
-  { id: "S001", name: "Ali Ahmad", rollNo: "101", status: "Present" },
-  { id: "S002", name: "Saima Bibi", rollNo: "102", status: "Present" },
-  { id: "S003", name: "Zubair Ali", rollNo: "103", status: "Absent" },
-  { id: "S004", name: "Iqra Khan", rollNo: "104", status: "Present" },
-  { id: "S005", name: "Hassan Raza", rollNo: "105", status: "Late" },
-];
+import { collection, query, where, onSnapshot, doc, setDoc, serverTimestamp, getDocs } from "firebase/firestore";
+import { logAction } from "../services/auditService";
 
 export default function AttendanceModule({ schoolId }: { schoolId?: string }) {
   const [students, setStudents] = useState<any[]>([]);
   const [attendance, setAttendance] = useState<Record<string, string>>({});
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedClass, setSelectedClass] = useState("Class 1");
   const [alertsSent, setAlertsSent] = useState<Record<string, boolean>>({});
   const [isSending, setIsSending] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const classes = ["Playgroup", "Nursery", "Prep", "Class 1", "Class 2", "Class 3", "Class 4", "Class 5", "Class 6", "Class 7", "Class 8", "Class 9", "Class 10", "Class 11", "Class 12"];
+
   useEffect(() => {
     if (!schoolId) return;
-    const q = query(collection(db, "schools", schoolId, "students"));
+    setLoading(true);
+    const q = query(
+      collection(db, "schools", schoolId, "students"),
+      where("class", "==", selectedClass)
+    );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setStudents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       setLoading(false);
     });
     return () => unsubscribe();
-  }, [schoolId]);
+  }, [schoolId, selectedClass]);
 
   useEffect(() => {
     if (!schoolId || !date) return;
-    const q = query(collection(db, "schools", schoolId, "attendance"), where("date", "==", date));
+    const q = query(
+      collection(db, "schools", schoolId, "attendance"), 
+      where("date", "==", date)
+    );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data: Record<string, string> = {};
       snapshot.docs.forEach(doc => {
@@ -52,6 +55,7 @@ export default function AttendanceModule({ schoolId }: { schoolId?: string }) {
         studentId,
         date,
         status,
+        class: selectedClass,
         updatedAt: serverTimestamp(),
         schoolId
       });
@@ -60,28 +64,30 @@ export default function AttendanceModule({ schoolId }: { schoolId?: string }) {
     }
   };
 
-  const sendAlert = (studentId: string) => {
+  const sendAlert = async (studentId: string) => {
     const student = students.find(s => s.id === studentId);
-    if (!student) return;
+    if (!student || !schoolId) return;
     
     // Simulate WhatsApp API call
     console.log(`Sending WhatsApp alert for ${student.name} to parent...`);
     setAlertsSent(prev => ({ ...prev, [studentId]: true }));
+    await logAction("Attendance Alert", `Sent absence alert for ${student.name}`, "academic");
   };
 
-  const sendAllAlerts = () => {
+  const sendAllAlerts = async () => {
+    if (!schoolId) return;
     setIsSending(true);
     const absentees = students.filter(s => attendance[s.id] === "Absent");
     
-    setTimeout(() => {
-      const newAlerts = { ...alertsSent };
-      absentees.forEach(s => {
-        newAlerts[s.id] = true;
-      });
-      setAlertsSent(newAlerts);
-      setIsSending(false);
-      alert(`${absentees.length} WhatsApp alerts have been sent to parents.`);
-    }, 1500);
+    for (const s of absentees) {
+      // Simulate API delay
+      await new Promise(r => setTimeout(r, 200));
+      setAlertsSent(prev => ({ ...prev, [s.id]: true }));
+    }
+    
+    await logAction("Bulk Attendance Alert", `Sent ${absentees.length} absence alerts`, "academic");
+    setIsSending(false);
+    alert(`${absentees.length} WhatsApp alerts have been sent to parents.`);
   };
 
   const stats = {
@@ -94,26 +100,33 @@ export default function AttendanceModule({ schoolId }: { schoolId?: string }) {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="text-lg font-bold text-slate-900">Daily Attendance</h3>
-          <p className="text-sm text-slate-500">Mark attendance and send automated alerts to parents.</p>
+          <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Daily Attendance</h3>
+          <p className="text-sm font-medium text-slate-500">Mark attendance manually. No biometrics required.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <select
+            value={selectedClass}
+            onChange={(e) => setSelectedClass(e.target.value)}
+            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold focus:border-emerald-500 focus:outline-none"
+          >
+            {classes.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
           <div className="relative">
             <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="rounded-lg border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              className="rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm font-bold focus:border-emerald-500 focus:outline-none"
             />
           </div>
           <button 
             onClick={sendAllAlerts}
             disabled={isSending || stats.absent === 0}
-            className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-2 text-xs font-black uppercase tracking-widest text-white hover:bg-emerald-700 disabled:opacity-50"
           >
             <MessageCircle className="h-4 w-4" />
-            {isSending ? "Sending..." : "Send Absentee Alerts"}
+            {isSending ? "Sending..." : "Send Alerts"}
           </button>
         </div>
       </div>
@@ -125,8 +138,8 @@ export default function AttendanceModule({ schoolId }: { schoolId?: string }) {
           { label: "Late", value: stats.late, color: "text-amber-600 bg-amber-50" },
         ].map((stat) => (
           <div key={stat.label} className="rounded-2xl border border-black/5 bg-white p-6 shadow-sm">
-            <p className="text-sm font-medium text-slate-500">{stat.label}</p>
-            <p className={cn("mt-1 text-3xl font-bold", stat.color.split(' ')[0])}>{stat.value}</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{stat.label}</p>
+            <p className={cn("mt-1 text-3xl font-black", stat.color.split(' ')[0])}>{stat.value}</p>
           </div>
         ))}
       </div>
@@ -134,69 +147,75 @@ export default function AttendanceModule({ schoolId }: { schoolId?: string }) {
       <div className="rounded-2xl border border-black/5 bg-white shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="bg-slate-50 text-xs font-bold uppercase tracking-wider text-slate-400">
+            <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-400">
               <tr>
                 <th className="px-6 py-4">Student</th>
                 <th className="px-6 py-4">Roll No</th>
                 <th className="px-6 py-4 text-center">Status</th>
-                <th className="px-6 py-4 text-right">Actions</th>
+                <th className="px-6 py-4 text-right">WhatsApp Alert</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50 text-sm">
-              {students.map((s) => (
-                <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 font-bold">
-                        {s.name.charAt(0)}
+            <tbody className="divide-y divide-slate-100 text-sm">
+              {loading ? (
+                <tr><td colSpan={4} className="py-10 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-emerald-500" /></td></tr>
+              ) : students.length === 0 ? (
+                <tr><td colSpan={4} className="py-10 text-center text-slate-500">No students found in {selectedClass}.</td></tr>
+              ) : (
+                students.map((s) => (
+                  <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600 font-black uppercase">
+                          {s.name.charAt(0)}
+                        </div>
+                        <span className="font-black text-slate-900 uppercase tracking-tight">{s.name}</span>
                       </div>
-                      <span className="font-bold text-slate-900">{s.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 font-medium text-slate-900">{s.rollNo}</td>
-                  <td className="px-6 py-4">
-                    <div className="flex justify-center gap-2">
-                      {[
-                        { label: "Present", color: "bg-emerald-500", icon: Check },
-                        { label: "Absent", color: "bg-rose-500", icon: X },
-                        { label: "Late", color: "bg-amber-500", icon: Clock },
-                      ].map((btn) => (
-                        <button
-                          key={btn.label}
-                          onClick={() => toggleStatus(s.id, btn.label)}
-                          className={cn(
-                            "flex h-8 w-8 items-center justify-center rounded-lg transition-all",
-                            attendance[s.id] === btn.label ? btn.color + " text-white shadow-md" : "bg-slate-50 text-slate-400 hover:bg-slate-100"
-                          )}
-                          title={btn.label}
-                        >
-                          <btn.icon className="h-4 w-4" />
-                        </button>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    {attendance[s.id] === "Absent" && (
-                      <div className="flex flex-col items-end gap-1">
-                        {alertsSent[s.id] ? (
-                          <span className="flex items-center gap-1 text-xs font-bold text-emerald-600">
-                            <CheckCircle className="h-3 w-3" />
-                            Alert Sent
-                          </span>
-                        ) : (
-                          <button 
-                            onClick={() => sendAlert(s.id)}
-                            className="flex items-center gap-1 text-xs font-bold text-rose-600 hover:underline"
+                    </td>
+                    <td className="px-6 py-4 font-bold text-slate-500 font-mono text-xs">{s.rollNo}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex justify-center gap-2">
+                        {[
+                          { label: "Present", color: "bg-emerald-500", icon: Check },
+                          { label: "Absent", color: "bg-rose-500", icon: X },
+                          { label: "Late", color: "bg-amber-500", icon: Clock },
+                        ].map((btn) => (
+                          <button
+                            key={btn.label}
+                            onClick={() => toggleStatus(s.id, btn.label)}
+                            className={cn(
+                              "flex h-9 w-9 items-center justify-center rounded-xl transition-all",
+                              attendance[s.id] === btn.label ? btn.color + " text-white shadow-lg scale-110" : "bg-slate-50 text-slate-400 hover:bg-slate-100"
+                            )}
+                            title={btn.label}
                           >
-                            <AlertCircle className="h-3 w-3" />
-                            Send Alert
+                            <btn.icon className="h-4 w-4" />
                           </button>
-                        )}
+                        ))}
                       </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      {attendance[s.id] === "Absent" && (
+                        <div className="flex flex-col items-end gap-1">
+                          {alertsSent[s.id] ? (
+                            <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-emerald-600">
+                              <CheckCircle className="h-3 w-3" />
+                              Sent
+                            </span>
+                          ) : (
+                            <button 
+                              onClick={() => sendAlert(s.id)}
+                              className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-rose-600 hover:underline"
+                            >
+                              <AlertCircle className="h-3 w-3" />
+                              Send Alert
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

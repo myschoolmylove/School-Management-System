@@ -23,7 +23,9 @@ import {
   TrendingUp,
   Award,
   Table as TableIcon,
-  FileSpreadsheet
+  FileSpreadsheet,
+  School,
+  Users
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { useAuth } from "../contexts/AuthContext";
@@ -152,6 +154,9 @@ const translations = {
     notices: "Notices",
     timetable: "Timetable",
     dateSheet: "Date Sheet",
+    logout: "Logout",
+    selectChild: "Select Child",
+    keepTrack: "Keep track of your child's academic progress and school activities.",
   },
   ur: {
     dashboard: "ڈیش بورڈ",
@@ -182,13 +187,16 @@ const translations = {
     notices: "نوٹس",
     timetable: "ٹائم ٹیبل",
     dateSheet: "ڈیٹ شیٹ",
-  }
+    logout: "لاگ آؤٹ",
+    selectChild: "بچہ منتخب کریں",
+    keepTrack: "اپنے بچے کی تعلیمی پیشرفت پر نظر رکھیں",
+  },
 };
 
 export default function ParentPortal() {
   const [activeTab, setActiveTab] = useState("Overview");
   const [lang, setLang] = useState<"en" | "ur">("en");
-  const { profile } = useAuth();
+  const { profile, logout } = useAuth();
   const t = translations[lang];
 
   const sidebarItems = [
@@ -213,8 +221,6 @@ export default function ParentPortal() {
     if (!profile?.schoolId || profile.role !== 'parent') return;
 
     // Fetch children linked to this parent
-    // We use parentUsername or parentUid. Since we implemented virtual emails based on username,
-    // the profile.username or profile.name should match.
     const parentId = profile.username || profile.name;
     const qChildren = query(
       collection(db, "schools", profile.schoolId, "students"),
@@ -953,80 +959,96 @@ export default function ParentPortal() {
   };
 
   return (
-    <div className={cn("flex min-h-screen bg-slate-50", lang === "ur" && "font-urdu text-right")} dir={lang === "ur" ? "rtl" : "ltr"}>
+    <div className={cn(
+      "flex min-h-screen bg-slate-50",
+      lang === "ur" ? "flex-row-reverse text-right" : "flex-row"
+    )} dir={lang === "ur" ? "rtl" : "ltr"}>
       {/* Sidebar */}
-      <aside className="hidden w-64 flex-col border-r border-slate-200 bg-white lg:flex">
-        <div className="flex h-20 items-center gap-3 border-b border-slate-50 px-6">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-lg shadow-emerald-200">
-            <GraduationCap className="h-6 w-6" />
+      <aside className={cn(
+        "fixed inset-y-0 z-50 w-72 bg-slate-900 text-white transition-all lg:static",
+        lang === "ur" ? "right-0" : "left-0"
+      )}>
+        <div className="flex h-24 items-center gap-3 px-8 border-b border-white/5">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500 shadow-lg shadow-emerald-500/20">
+            <School className="h-6 w-6 text-white" />
           </div>
-          <span className="text-xl font-bold tracking-tight text-slate-900">{t.dashboard}</span>
+          <span className="text-xl font-black uppercase tracking-widest">Parent Portal</span>
         </div>
 
-        <div className="flex flex-1 flex-col gap-1 p-4">
+        <nav className="mt-8 space-y-2 px-4">
           {sidebarItems.map((item) => (
             <button
               key={item.name}
               onClick={() => setActiveTab(item.name)}
               className={cn(
-                "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold transition-all",
-                activeTab === item.name
-                  ? "bg-emerald-50 text-emerald-600 shadow-sm"
-                  : "text-slate-400 hover:bg-slate-50 hover:text-slate-600"
+                "flex w-full items-center gap-3 rounded-xl px-4 py-3.5 text-sm font-bold transition-all",
+                activeTab === item.name 
+                  ? "bg-emerald-50 text-white shadow-lg shadow-emerald-500/20" 
+                  : "text-slate-400 hover:bg-white/5 hover:text-white"
               )}
             >
               <item.icon className="h-5 w-5" />
               {item.label}
             </button>
           ))}
-        </div>
-
-        <div className="border-t border-slate-50 p-4">
-          {children.length > 1 && (
-            <div className="mb-4">
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Select Child</label>
-              <select 
-                value={selectedChildIndex}
-                onChange={(e) => setSelectedChildIndex(parseInt(e.target.value))}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold focus:outline-none"
-              >
-                {children.map((child, idx) => (
-                  <option key={child.id} value={idx}>{child.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
-          <div className="flex items-center gap-3 rounded-2xl bg-slate-900 p-4 text-white">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500 font-bold">
-              {currentStudent?.name?.[0] || "S"}
-            </div>
-            <div className="flex-1 overflow-hidden">
-              <p className="truncate text-sm font-bold">{currentStudent?.name || "Student"}</p>
-              <p className="text-xs text-slate-400">{currentStudent?.rollNo || "N/A"}</p>
-            </div>
-          </div>
-        </div>
+          <button 
+            onClick={logout}
+            className="flex w-full items-center gap-3 rounded-xl px-4 py-3.5 text-sm font-bold text-rose-400 hover:bg-rose-500/10 transition-all mt-8"
+          >
+            <Lock className="h-5 w-5" />
+            {lang === "ur" ? "لاگ آؤٹ" : "Logout"}
+          </button>
+        </nav>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto">
-        <header className="flex h-20 items-center justify-between border-b border-slate-200 bg-white px-8">
-          <div className="flex items-center gap-4">
-            <h2 className="text-xl font-bold text-slate-900">{sidebarItems.find(i => i.name === activeTab)?.label}</h2>
-            <div className="h-6 w-px bg-slate-200" />
-            <p className="text-sm font-medium text-slate-500">{currentStudent?.class} - {currentStudent?.section}</p>
+      <main className="flex-1 overflow-y-auto p-4 lg:p-8">
+        {/* Header */}
+        <header className="mb-8 flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tight">
+              {t.welcome} {profile?.name}
+            </h2>
+            <p className="text-sm font-medium text-slate-500">
+              {lang === "ur" ? "اپنے بچے کی تعلیمی پیشرفت پر نظر رکھیں" : "Keep track of your child's academic progress and school activities."}
+            </p>
           </div>
           <div className="flex items-center gap-4">
-            <button className="relative rounded-full border border-slate-200 p-2 text-slate-400 hover:bg-slate-50">
-              <Bell className="h-5 w-5" />
-              <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-rose-500" />
+            {/* Language Toggle */}
+            <button 
+              onClick={() => setLang(lang === "en" ? "ur" : "en")}
+              className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 shadow-sm"
+            >
+              <Languages className="h-4 w-4 text-emerald-500" />
+              {lang === "en" ? "اردو" : "English"}
             </button>
+
+            {/* Child Selector */}
+            {children.length > 1 && (
+              <div className="relative">
+                <select 
+                  value={selectedChildIndex}
+                  onChange={(e) => setSelectedChildIndex(Number(e.target.value))}
+                  className="appearance-none rounded-xl border border-slate-200 bg-white px-10 py-2 text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 shadow-sm"
+                >
+                  {children.map((child, idx) => (
+                    <option key={child.id} value={idx}>{child.name}</option>
+                  ))}
+                </select>
+                <Users className={cn(
+                  "absolute top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400",
+                  lang === "ur" ? "right-3" : "left-3"
+                )} />
+                <ChevronDown className={cn(
+                  "absolute top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400",
+                  lang === "ur" ? "left-3" : "right-3"
+                )} />
+              </div>
+            )}
           </div>
         </header>
 
-        <div className="p-8">
-          {renderContent()}
-        </div>
+        {renderContent()}
       </main>
     </div>
   );

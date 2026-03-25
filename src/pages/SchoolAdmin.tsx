@@ -20,6 +20,11 @@ import IDCardModule from "@/src/components/IDCardModule";
 import WhatsAppModule from "@/src/components/WhatsAppModule";
 import BiometricModule from "@/src/components/BiometricModule";
 import TimetableModule from "@/src/components/TimetableModule";
+import GalleryModule from "@/src/components/GalleryModule";
+import EventsModule from "@/src/components/EventsModule";
+import AdmissionsModule from "@/src/components/AdmissionsModule";
+import NoticesModule from "@/src/components/NoticesModule";
+import SettingsModule from "@/src/components/SettingsModule";
 import * as XLSX from 'xlsx';
 
 const sidebarItems = [
@@ -275,130 +280,15 @@ export default function SchoolAdmin() {
           </div>
         );
       case "Gallery":
-        return (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xl font-bold text-slate-900">School Gallery</h3>
-              <button className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700">
-                <Plus className="h-4 w-4" />
-                Add Photos
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-4">
-              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-                <div key={i} className="group relative aspect-square overflow-hidden rounded-2xl border border-black/5 bg-slate-100">
-                  <img src={`https://picsum.photos/seed/school${i}/400/400`} alt="Gallery" className="h-full w-full object-cover transition-transform group-hover:scale-110" referrerPolicy="no-referrer" />
-                  <div className="absolute inset-0 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100 flex items-center justify-center">
-                    <button className="rounded-full bg-white p-2 text-slate-900 shadow-lg">
-                      <XCircle className="h-5 w-5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
+        return <GalleryModule schoolId={profile?.schoolId} />;
       case "Events":
-        return (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xl font-bold text-slate-900">Events Calendar</h3>
-              <button className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700">
-                <Plus className="h-4 w-4" />
-                Add Event
-              </button>
-            </div>
-            <div className="space-y-4">
-              {[
-                { title: "Annual Sports Day", date: "2026-04-15", type: "Event", desc: "Inter-school sports competition." },
-                { title: "Eid-ul-Fitr Holidays", date: "2026-03-30", type: "Holiday", desc: "School will remain closed for 3 days." },
-                { title: "Final Term Exams", date: "2026-05-10", type: "Exam", desc: "Annual examinations for all classes." },
-              ].map((event, i) => (
-                <div key={i} className="flex items-center gap-6 rounded-2xl border border-black/5 bg-white p-6 shadow-sm">
-                  <div className="flex h-16 w-16 flex-col items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-                    <span className="text-xs font-bold uppercase">{new Date(event.date).toLocaleString('default', { month: 'short' })}</span>
-                    <span className="text-2xl font-bold">{new Date(event.date).getDate()}</span>
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <h4 className="text-lg font-bold text-slate-900">{event.title}</h4>
-                      <span className={cn(
-                        "rounded-full px-2 py-0.5 text-xs font-bold",
-                        event.type === "Holiday" ? "bg-rose-50 text-rose-600" : 
-                        event.type === "Exam" ? "bg-blue-50 text-blue-600" : "bg-emerald-50 text-emerald-600"
-                      )}>
-                        {event.type}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-sm text-slate-500">{event.desc}</p>
-                  </div>
-                  <button className="text-slate-400 hover:text-slate-600">
-                    <Settings className="h-5 w-5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
+        return <EventsModule schoolId={profile?.schoolId} />;
+      case "Admissions":
+        return <AdmissionsModule schoolId={profile?.schoolId} />;
+      case "Notices":
+        return <NoticesModule schoolId={profile?.schoolId} />;
       case "Settings":
-        return (
-          <div className="max-w-2xl space-y-8">
-            <div className="rounded-2xl border border-black/5 bg-white p-8 shadow-sm">
-              <h3 className="text-lg font-bold text-slate-900">School Profile</h3>
-              <div className="mt-8 space-y-6">
-                <div className="flex items-center gap-4">
-                  <div className="h-20 w-20 rounded-2xl bg-slate-100 flex items-center justify-center">
-                    <ImageIcon className="h-8 w-8 text-slate-400" />
-                  </div>
-                  <button className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50">
-                    Change Logo
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700">School Name</label>
-                    <input type="text" defaultValue={schoolData?.name || ""} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700">Principal Name</label>
-                    <input type="text" defaultValue={schoolData?.principal || ""} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700">Address</label>
-                  <textarea className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20" rows={3} defaultValue="123 Education Road, Lahore, Pakistan" />
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-black/5 bg-white p-8 shadow-sm">
-              <h3 className="text-lg font-bold text-slate-900">Notification Settings</h3>
-              <div className="mt-6 space-y-4">
-                {[
-                  { label: "WhatsApp Attendance Alerts", desc: "Send automatic alerts to parents when students arrive/leave." },
-                  { label: "Fee Reminders", desc: "Send monthly fee reminders to parents." },
-                  { label: "Exam Result Alerts", desc: "Notify parents when results are published." },
-                ].map((item, i) => (
-                  <div key={i} className="flex items-center justify-between py-2">
-                    <div>
-                      <p className="text-sm font-bold text-slate-900">{item.label}</p>
-                      <p className="text-xs text-slate-500">{item.desc}</p>
-                    </div>
-                    <button className="h-6 w-11 rounded-full bg-emerald-600 transition-colors relative">
-                      <span className="absolute right-1 top-1 h-4 w-4 rounded-full bg-white shadow-sm" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="pt-4">
-              <button className="w-full rounded-xl bg-slate-900 py-4 text-sm font-bold text-white hover:bg-slate-800 transition-all">
-                Save All Changes
-              </button>
-            </div>
-          </div>
-        );
+        return <SettingsModule schoolId={profile?.schoolId} />;
       default:
         return (
           <div className="flex h-[60vh] flex-col items-center justify-center text-center">
