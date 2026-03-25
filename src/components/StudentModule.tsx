@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Plus, Search, Filter, UserPlus, Edit2, Trash2, MoreVertical, GraduationCap, CheckCircle, XCircle, X, Camera, Loader2 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { db, auth } from "../firebase";
-import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, serverTimestamp, setDoc } from "firebase/firestore";
+import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, serverTimestamp, setDoc, getDocs, where } from "firebase/firestore";
 import { logAction } from "../services/auditService";
 import * as XLSX from "xlsx";
 import { getSecondaryAuth } from "../lib/authUtils";
@@ -220,7 +220,6 @@ export default function StudentModule({ schoolId }: { schoolId?: string }) {
               } catch (authErr: any) {
                 if (authErr.code === "auth/email-already-in-use") {
                   // Find existing parent in Firestore
-                  const { getDocs, query, collection, where } = await import("firebase/firestore");
                   const usersSnap = await getDocs(query(collection(db, "users"), where("email", "==", virtualEmail)));
                   if (!usersSnap.empty) {
                     parentUid = usersSnap.docs[0].id;

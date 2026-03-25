@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { Shield, Users, CreditCard, CheckCircle, XCircle, Search, Filter, MoreVertical, Settings, LayoutDashboard, School, RefreshCw, Plus, X } from "lucide-react";
+import { Shield, Users, CreditCard, CheckCircle, XCircle, Search, Filter, MoreVertical, Settings, LayoutDashboard, School, RefreshCw, Plus, X, FileText } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/src/lib/utils";
 import { db, auth } from "../firebase";
-import { collection, addDoc, getDocs, query, where, doc, updateDoc, setDoc, onSnapshot } from "firebase/firestore";
+import { collection, addDoc, getDocs, query, where, doc, updateDoc, setDoc, onSnapshot, orderBy, limit } from "firebase/firestore";
 import { createUserWithEmailAndPassword, onAuthStateChanged, getAuth, signOut } from "firebase/auth";
 import { initializeApp, getApp, getApps } from "firebase/app";
 import firebaseConfig from "../../firebase-applet-config.json";
