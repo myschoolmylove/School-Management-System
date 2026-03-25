@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Smartphone, MessageCircle, Bell, Clock, CheckCircle, AlertCircle, Send, Settings, Search, Filter, X, Bot, Zap, ExternalLink } from "lucide-react";
+import { Smartphone, MessageCircle, Bell, Clock, CheckCircle, AlertCircle, Send, Settings, Search, Filter, X, Bot, Zap, ExternalLink, Info, AlertTriangle } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { db } from "../firebase";
 import { collection, query, onSnapshot, addDoc, orderBy, limit, serverTimestamp } from "firebase/firestore";
@@ -20,6 +20,7 @@ export default function WhatsAppModule() {
   const [isSending, setIsSending] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [newMessage, setNewMessage] = useState({
     recipient: "",
     phone: "",
@@ -126,35 +127,107 @@ export default function WhatsAppModule() {
       </div>
 
       {/* Integration Status */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+      {/* API Status & Guide */}
+      <div className="grid gap-6 sm:grid-cols-2">
         <div className="rounded-2xl border border-black/5 bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between">
-            <div className="rounded-xl bg-emerald-50 p-2 text-emerald-600">
-              <Smartphone className="h-6 w-6" />
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">WhatsApp API Status</h3>
+              <p className="text-sm text-slate-500">
+                {process.env.WHATSAPP_API_TOKEN ? "✅ API Connected" : "⚠️ API in Simulation Mode"}
+              </p>
             </div>
-            <span className="flex items-center gap-1 text-xs font-bold text-emerald-600">
-              <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              Connected
-            </span>
+            <button 
+              onClick={() => setIsGuideOpen(true)}
+              className="flex items-center gap-2 rounded-xl bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-600 hover:bg-emerald-100"
+            >
+              <Info className="h-4 w-4" />
+              Setup Guide
+            </button>
           </div>
-          <p className="mt-4 text-sm font-medium text-slate-500">API Status</p>
-          <p className="mt-1 text-2xl font-bold text-slate-900">WhatsApp API v2.4</p>
+          {!process.env.WHATSAPP_API_TOKEN && (
+            <p className="mt-4 text-xs text-amber-600 flex items-center gap-2">
+              <AlertTriangle className="h-3 w-3" />
+              Credentials missing in AI Studio settings.
+            </p>
+          )}
         </div>
+
         <div className="rounded-2xl border border-black/5 bg-white p-6 shadow-sm">
-          <div className="rounded-xl bg-blue-50 p-2 text-blue-600 w-fit">
-            <MessageCircle className="h-6 w-6" />
+          <div className="flex items-center gap-4">
+            <div className="rounded-xl bg-emerald-50 p-3 text-emerald-600">
+              <MessageCircle className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-slate-500">Messages Sent (API)</p>
+              <p className="text-2xl font-bold text-slate-900">{alerts.filter(a => a.status === "Sent").length}</p>
+            </div>
           </div>
-          <p className="mt-4 text-sm font-medium text-slate-500">Messages Sent (Today)</p>
-          <p className="mt-1 text-2xl font-bold text-slate-900">{alerts.length}</p>
-        </div>
-        <div className="rounded-2xl border border-black/5 bg-white p-6 shadow-sm">
-          <div className="rounded-xl bg-amber-50 p-2 text-amber-600 w-fit">
-            <Clock className="h-6 w-6" />
-          </div>
-          <p className="mt-4 text-sm font-medium text-slate-500">Scheduled Alerts</p>
-          <p className="mt-1 text-2xl font-bold text-slate-900">48</p>
         </div>
       </div>
+
+      {/* Setup Guide Modal */}
+      {isGuideOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-3xl bg-white p-8 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <h3 className="text-xl font-bold text-slate-900">WhatsApp API Setup Guide</h3>
+              <button onClick={() => setIsGuideOpen(false)} className="rounded-full p-2 hover:bg-slate-100">
+                <X className="h-5 w-5 text-slate-400" />
+              </button>
+            </div>
+            
+            <div className="mt-6 space-y-6 overflow-y-auto max-h-[60vh] pr-2">
+              <section>
+                <h4 className="font-bold text-slate-900">1. Create Meta Developer Account</h4>
+                <p className="text-sm text-slate-500">Go to <a href="https://developers.facebook.com" target="_blank" className="text-emerald-600 underline">Meta for Developers</a> and create an account.</p>
+              </section>
+
+              <section>
+                <h4 className="font-bold text-slate-900">2. Create a WhatsApp App</h4>
+                <p className="text-sm text-slate-500">Create a new app, select "Other" &rarr; "Business" and add the "WhatsApp" product.</p>
+              </section>
+
+              <section>
+                <h4 className="font-bold text-slate-900">3. Get Credentials</h4>
+                <ul className="mt-2 list-disc pl-5 text-sm text-slate-500 space-y-1">
+                  <li><strong>Phone Number ID:</strong> Found in WhatsApp &rarr; Getting Started.</li>
+                  <li><strong>API Token:</strong> Generate a Permanent Access Token in System Users.</li>
+                  <li><strong>Verify Token:</strong> Any string you choose (e.g., "my_school_bot").</li>
+                </ul>
+              </section>
+
+              <section>
+                <h4 className="font-bold text-slate-900">4. Configure Webhook</h4>
+                <p className="text-sm text-slate-500">In WhatsApp &rarr; Configuration, set the Webhook URL to:</p>
+                <code className="mt-2 block rounded-lg bg-slate-100 p-3 text-xs text-slate-700 break-all">
+                  {window.location.origin}/api/whatsapp/webhook
+                </code>
+                <p className="mt-2 text-xs text-slate-400 italic">Note: Use the "Shared App URL" for production.</p>
+              </section>
+
+              <section className="rounded-xl bg-amber-50 p-4 border border-amber-100">
+                <h4 className="font-bold text-amber-900 flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  Important
+                </h4>
+                <p className="mt-1 text-sm text-amber-800">
+                  Once you have these keys, add them to the <strong>Settings</strong> menu in AI Studio.
+                </p>
+              </section>
+            </div>
+
+            <div className="mt-8 flex justify-end">
+              <button 
+                onClick={() => setIsGuideOpen(false)}
+                className="rounded-xl bg-slate-900 px-6 py-3 text-sm font-bold text-white hover:bg-slate-800"
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* WhatsApp Bot Simulator */}
       <div className="rounded-2xl border border-black/5 bg-slate-900 p-8 text-white shadow-xl">

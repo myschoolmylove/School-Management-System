@@ -79,81 +79,70 @@ export default function StudentModule({ schoolId }: { schoolId?: string }) {
     setLoading(true);
     try {
       const finalParentUsername = formData.parentUsername || formData.rollNo;
-      
+      let parentUid = editingStudent?.parentUid || "";
+
+      // Handle parent account creation/linking
+      if (finalParentUsername) {
+        const sanitizedUsername = finalParentUsername.toLowerCase().replace(/[^a-z0-9]/g, '_');
+        const virtualEmail = `${sanitizedUsername}@${schoolId}.parent.com`;
+        
+        try {
+          const secondaryAuth = getSecondaryAuth();
+          try {
+            const userCredential = await createUserWithEmailAndPassword(secondaryAuth, virtualEmail, "Parent@123");
+            parentUid = userCredential.user.uid;
+            
+            await setDoc(doc(db, "users", parentUid), {
+              name: `${formData.name}'s Parent`,
+              email: virtualEmail,
+              username: finalParentUsername,
+              role: "parent",
+              schoolId,
+              status: "active",
+              createdAt: new Date().toISOString()
+            });
+          } catch (authErr: any) {
+            if (authErr.code === "auth/email-already-in-use") {
+              const usersSnap = await getDocs(query(collection(db, "users"), where("email", "==", virtualEmail)));
+              if (!usersSnap.empty) {
+                parentUid = usersSnap.docs[0].id;
+              }
+            }
+          }
+          await signOut(secondaryAuth);
+        } catch (err) {
+          console.error("Error handling parent account:", err);
+        }
+      }
+
       if (editingStudent) {
         await updateDoc(doc(db, "schools", schoolId, "students", editingStudent.id), {
           ...formData,
           parentUsername: finalParentUsername,
+          parentUid: parentUid || null,
           updatedAt: serverTimestamp(),
         });
-        await logAction("Updated Student", `${formData.name} (ID: ${editingStudent.id})`, "admission");
-      } else {
-        // Create parent Auth user if parentUsername or rollNo is provided
-        if (finalParentUsername) {
-          try {
-            const secondaryAuth = getSecondaryAuth();
-            const sanitizedUsername = finalParentUsername.toLowerCase().replace(/[^a-z0-9]/g, '_');
-            const virtualEmail = `${sanitizedUsername}@${schoolId}.parent.com`;
-            
-            let parentUid = "";
-            try {
-              const userCredential = await createUserWithEmailAndPassword(secondaryAuth, virtualEmail, "Parent@123");
-              parentUid = userCredential.user.uid;
-              
-              // Create user profile for parent
-              await setDoc(doc(db, "users", parentUid), {
-                name: `${formData.name}'s Parent`,
-                email: virtualEmail,
-                username: finalParentUsername,
-                role: "parent",
-                schoolId,
-                studentId: "", // Will update after student doc is created
-                status: "active",
-                createdAt: new Date().toISOString()
-              });
-              
-              await signOut(secondaryAuth);
-            } catch (authErr: any) {
-              if (authErr.code === "auth/email-already-in-use") {
-                // Find existing parent in Firestore
-                const { getDocs, query, collection, where } = await import("firebase/firestore");
-                const usersSnap = await getDocs(query(collection(db, "users"), where("email", "==", virtualEmail)));
-                if (!usersSnap.empty) {
-                  parentUid = usersSnap.docs[0].id;
-                }
-              } else {
-                throw authErr;
-              }
-            }
-
-            const docRef = await addDoc(collection(db, "schools", schoolId, "students"), {
-              ...formData,
-              parentUsername: finalParentUsername,
-              schoolId,
-              parentUid: parentUid || null,
-              createdAt: serverTimestamp(),
-            });
-
-            // Update parent profile with studentId (if multiple students, this might need to be an array, but for now we keep it simple or append)
-            if (parentUid) {
-              await updateDoc(doc(db, "users", parentUid), {
-                studentId: docRef.id // In a real app, this would be an array of studentIds
-              });
-            }
-
-            await logAction("Added Student", `${formData.name} (ID: ${docRef.id})`, "admission");
-          } catch (authErr: any) {
-            console.error("Auth error:", authErr);
-            throw authErr;
-          }
-        } else {
-          const docRef = await addDoc(collection(db, "schools", schoolId, "students"), {
-            ...formData,
-            schoolId,
-            createdAt: serverTimestamp(),
-          });
-          await logAction("Added Student", `${formData.name} (ID: ${docRef.id})`, "admission");
+        
+        if (parentUid) {
+          await updateDoc(doc(db, "users", parentUid), { studentId: editingStudent.id });
         }
+        
+        await logAction("Updated Student", `${formData.name} (ID: editingStudent.id)`, "admission");
+      } else {
+        // Create student doc
+        const docRef = await addDoc(collection(db, "schools", schoolId, "students"), {
+          ...formData,
+          parentUsername: finalParentUsername,
+          schoolId,
+          parentUid: parentUid || null,
+          createdAt: serverTimestamp(),
+        });
+
+        if (parentUid) {
+          await updateDoc(doc(db, "users", parentUid), { studentId: docRef.id });
+        }
+
+        await logAction("Added Student", `${formData.name} (ID: ${docRef.id})`, "admission");
       }
       setIsModalOpen(false);
       setEditingStudent(null);

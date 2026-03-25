@@ -82,7 +82,7 @@ export default function Login() {
       if (docSnap.exists()) {
         const profile = docSnap.data() as UserProfile;
         if (profile.role !== role) {
-          setError(`Invalid role for this account. Expected ${role}.`);
+          setError(`Invalid role for this account. Your account is registered as a ${profile.role}, but you are trying to login as a ${role}.`);
           await auth.signOut();
           setIsLoading(false);
           return;
@@ -118,7 +118,7 @@ export default function Login() {
         await setDoc(docRef, newProfile);
         navigate("/super-admin");
       } else {
-        setError("User profile not found in database.");
+        setError("User profile not found in database. Please contact school administration to ensure your account is properly set up.");
         await auth.signOut();
       }
     } catch (err: any) {

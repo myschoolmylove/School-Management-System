@@ -28,6 +28,8 @@ export type UserProfile = {
   email: string;
   role: UserRole;
   schoolId?: string;
+  username?: string;
+  studentId?: string;
   name: string;
   photoUrl?: string;
   createdAt: string;

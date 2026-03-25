@@ -218,18 +218,24 @@ export default function ParentPortal() {
   const currentStudent = selectedChild;
 
   useEffect(() => {
-    if (!profile?.schoolId || profile.role !== 'parent') return;
+    if (!profile) return;
+    if (!profile.schoolId || profile.role !== 'parent') {
+      setIsLoading(false);
+      return;
+    }
 
     // Fetch children linked to this parent
-    const parentId = profile.username || profile.name;
     const qChildren = query(
       collection(db, "schools", profile.schoolId, "students"),
-      where("parentUsername", "==", parentId)
+      where("parentUid", "==", profile.uid)
     );
 
     const unsubChildren = onSnapshot(qChildren, (snapshot) => {
       const childList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setChildren(childList);
+      setIsLoading(false);
+    }, (error) => {
+      console.error("Error fetching children:", error);
       setIsLoading(false);
     });
 
@@ -286,12 +292,20 @@ export default function ParentPortal() {
 
     if (children.length === 0) {
       return (
-        <div className="flex h-[60vh] flex-col items-center justify-center text-center">
+        <div className="flex h-[60vh] flex-col items-center justify-center text-center p-6">
           <div className="rounded-full bg-slate-100 p-6">
             <GraduationCap className="h-12 w-12 text-slate-400" />
           </div>
           <h3 className="mt-6 text-xl font-bold text-slate-900">No Children Linked</h3>
-          <p className="mt-2 max-w-xs text-slate-500">Please contact the school administration to link your children to your account.</p>
+          <p className="mt-2 max-w-md text-slate-500">
+            We couldn't find any students linked to your account. 
+            Please contact the school administration to ensure your account is correctly linked to your child's record.
+          </p>
+          <div className="mt-8 flex flex-col gap-2 rounded-xl border border-slate-100 bg-slate-50 p-4 text-xs text-slate-400">
+            <p>Your UID: <span className="font-mono font-medium text-slate-600">{profile?.uid}</span></p>
+            <p>Your Username: <span className="font-mono font-medium text-slate-600">{profile?.username || "Not set"}</span></p>
+            <p>School ID: <span className="font-mono font-medium text-slate-600">{profile?.schoolId}</span></p>
+          </div>
         </div>
       );
     }

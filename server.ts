@@ -52,17 +52,79 @@ async function startServer() {
   app.post("/api/whatsapp/webhook", async (req, res) => {
     const body = req.body;
 
-    // Logic to parse incoming message (Meta/Twilio format)
-    // Example: const incomingMsg = body.entry[0].changes[0].value.messages[0].text.body;
-    // Example: const sender = body.entry[0].changes[0].value.messages[0].from;
+    // Meta Webhook format parsing
+    try {
+      if (body.object === 'whatsapp_business_account') {
+        const entry = body.entry?.[0];
+        const changes = entry?.changes?.[0];
+        const value = changes?.value;
+        const message = value?.messages?.[0];
 
-    console.log("[WhatsApp Bot] Received message:", JSON.stringify(body, null, 2));
+        if (message) {
+          const from = message.from; // Sender's phone number
+          const text = message.text?.body?.trim()?.toUpperCase();
 
-    // Simple Bot Logic:
-    // if (incomingMsg.toUpperCase().startsWith("RESULT")) {
-    //    const rollNo = incomingMsg.split(" ")[1];
-    //    await sendWhatsApp(sender, `Result for ${rollNo}: Passed with Grade A!`);
-    // }
+          console.log(`[WhatsApp Bot] Message from ${from}: ${text}`);
+
+          let responseText = "";
+
+          if (text === "START" || text === "HELLO" || text === "HI") {
+            responseText = "Welcome to My School My Love! 🏫\n\nReply with:\n*RESULT [RollNo]* - To check results\n*FEE [RollNo]* - To check fee status\n*ATTENDANCE [RollNo]* - To check attendance\n*HELP* - For more info";
+          } else if (text?.startsWith("RESULT")) {
+            const rollNo = text.split(" ")[1];
+            if (rollNo) {
+              // Logic to fetch result from Firestore would go here
+              responseText = `📊 Result for Roll No ${rollNo}:\nEnglish: 85/100\nMath: 92/100\nScience: 88/100\nTotal: 265/300\nGrade: A+`;
+            } else {
+              responseText = "Please provide a Roll Number. Example: RESULT 101";
+            }
+          } else if (text?.startsWith("FEE")) {
+            const rollNo = text.split(" ")[1];
+            if (rollNo) {
+              responseText = `💰 Fee Status for Roll No ${rollNo}:\nMonthly Fee: Paid\nExam Fee: Pending ($20)\nTotal Outstanding: $20`;
+            } else {
+              responseText = "Please provide a Roll Number. Example: FEE 101";
+            }
+          } else if (text?.startsWith("ATTENDANCE")) {
+            const rollNo = text.split(" ")[1];
+            if (rollNo) {
+              responseText = `📅 Attendance for Roll No ${rollNo}:\nTotal Days: 120\nPresent: 112\nAbsent: 8\nPercentage: 93.3%`;
+            } else {
+              responseText = "Please provide a Roll Number. Example: ATTENDANCE 101";
+            }
+          } else if (text === "HELP") {
+            responseText = "Commands:\n- RESULT [RollNo]\n- FEE [RollNo]\n- ATTENDANCE [RollNo]\n- HELLO (Main Menu)";
+          } else {
+            responseText = "Sorry, I didn't understand that command. Reply with HELLO to see available options.";
+          }
+
+          // Send response back via WhatsApp API
+          if (responseText && process.env.WHATSAPP_API_TOKEN) {
+            try {
+              await fetch(`https://graph.facebook.com/v17.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`, {
+                method: 'POST',
+                headers: { 
+                  'Authorization': `Bearer ${process.env.WHATSAPP_API_TOKEN}`, 
+                  'Content-Type': 'application/json' 
+                },
+                body: JSON.stringify({ 
+                  messaging_product: 'whatsapp', 
+                  to: from, 
+                  type: 'text', 
+                  text: { body: responseText } 
+                })
+              });
+            } catch (sendErr) {
+              console.error("[WhatsApp Bot] Error sending response:", sendErr);
+            }
+          } else {
+            console.log(`[WhatsApp Bot] Simulated Response to ${from}: ${responseText}`);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[WhatsApp Bot] Webhook processing error:", err);
+    }
 
     res.sendStatus(200);
   });

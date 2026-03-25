@@ -98,6 +98,18 @@ export default function SuperAdmin() {
     }
   };
 
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (activeTab === "Audit Logs") {
+      const q = query(collection(db, "audit_logs"), orderBy("timestamp", "desc"), limit(100));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        setAuditLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      });
+      return () => unsubscribe();
+    }
+  }, [activeTab]);
+
   const handleAddSchool = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -201,6 +213,7 @@ export default function SuperAdmin() {
             { name: "Schools", icon: School },
             { name: "Licensing", icon: CreditCard },
             { name: "Users", icon: Users },
+            { name: "Audit Logs", icon: FileText },
             { name: "Settings", icon: Settings },
           ].map((item) => (
             <button
@@ -612,6 +625,50 @@ export default function SuperAdmin() {
             </div>
           )}
 
+          {activeTab === "Audit Logs" && (
+            <div className="p-8">
+              <div className="rounded-2xl border border-black/5 bg-white shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-50 text-xs font-bold uppercase tracking-wider text-slate-400">
+                      <tr>
+                        <th className="px-6 py-4">Timestamp</th>
+                        <th className="px-6 py-4">Action</th>
+                        <th className="px-6 py-4">Details</th>
+                        <th className="px-6 py-4">Module</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50 text-sm">
+                      {auditLogs.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="px-6 py-12 text-center text-slate-400">No logs found.</td>
+                        </tr>
+                      ) : auditLogs.map((log) => (
+                        <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="px-6 py-4 text-slate-500">
+                            {log.timestamp?.toDate ? log.timestamp.toDate().toLocaleString() : new Date(log.timestamp).toLocaleString()}
+                          </td>
+                          <td className="px-6 py-4 font-bold text-slate-900">{log.action}</td>
+                          <td className="px-6 py-4 text-slate-600">{log.details}</td>
+                          <td className="px-6 py-4">
+                            <span className={cn(
+                              "rounded-lg px-2 py-1 text-[10px] font-bold uppercase",
+                              log.module === "admission" ? "bg-emerald-50 text-emerald-600" :
+                              log.module === "whatsapp" ? "bg-blue-50 text-blue-600" :
+                              "bg-slate-50 text-slate-600"
+                            )}>
+                              {log.module}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
           {activeTab === "Settings" && (
             <div className="max-w-2xl space-y-8">
               <div className="rounded-2xl border border-black/5 bg-white p-8 shadow-sm">
@@ -661,12 +718,95 @@ export default function SuperAdmin() {
               </div>
 
               <div className="rounded-2xl border border-black/5 bg-white p-8 shadow-sm">
-                <h3 className="text-lg font-bold text-slate-900">Backup & Recovery</h3>
-                <p className="mt-2 text-sm text-slate-500">Download a full backup of the system database.</p>
-                <button className="mt-6 flex items-center gap-2 rounded-xl border border-slate-200 px-6 py-3 text-sm font-bold text-slate-600 hover:bg-slate-50">
-                  <RefreshCw className="h-4 w-4" />
-                  Generate Full Backup
-                </button>
+                <h3 className="text-lg font-bold text-slate-900">System Maintenance</h3>
+                <p className="mt-2 text-sm text-slate-500">Synchronize parent accounts and link them to students based on usernames.</p>
+                <div className="mt-6 flex flex-col gap-4">
+                  <button 
+                    onClick={async () => {
+                      if (!window.confirm("This will scan all students and ensure parent accounts are correctly linked. Continue?")) return;
+                      setIsLoading(true);
+                      try {
+                        const schoolsSnap = await getDocs(collection(db, "schools"));
+                        let totalFixed = 0;
+                        const secondaryAuth = getSecondaryAuth();
+
+                        for (const schoolDoc of schoolsSnap.docs) {
+                          const schoolId = schoolDoc.id;
+                          const studentsSnap = await getDocs(collection(db, "schools", schoolId, "students"));
+                          
+                          for (const studentDoc of studentsSnap.docs) {
+                            const studentData = studentDoc.data();
+                            const parentUsername = studentData.parentUsername || studentData.rollNo;
+                            
+                            if (parentUsername) {
+                              const sanitizedUsername = parentUsername.toLowerCase().replace(/[^a-z0-9]/g, '_');
+                              const virtualEmail = `${sanitizedUsername}@${schoolId}.parent.com`;
+                              
+                              let parentUid = studentData.parentUid || "";
+                              
+                              // Check if parent account exists in Firestore
+                              const usersSnap = await getDocs(query(collection(db, "users"), where("email", "==", virtualEmail)));
+                              
+                              if (usersSnap.empty) {
+                                // Create parent account
+                                try {
+                                  const userCredential = await createUserWithEmailAndPassword(secondaryAuth, virtualEmail, "Parent@123");
+                                  parentUid = userCredential.user.uid;
+                                  
+                                  await setDoc(doc(db, "users", parentUid), {
+                                    name: `${studentData.name}'s Parent`,
+                                    email: virtualEmail,
+                                    username: parentUsername,
+                                    role: "parent",
+                                    schoolId,
+                                    studentId: studentDoc.id,
+                                    status: "active",
+                                    createdAt: new Date().toISOString()
+                                  });
+                                  totalFixed++;
+                                } catch (authErr: any) {
+                                  if (authErr.code === "auth/email-already-in-use") {
+                                    // Should have been found in usersSnap, but maybe role was wrong?
+                                    // We'll skip for now or log
+                                  }
+                                }
+                              } else {
+                                parentUid = usersSnap.docs[0].id;
+                                // Update studentId if missing
+                                if (!usersSnap.docs[0].data().studentId) {
+                                  await updateDoc(doc(db, "users", parentUid), { studentId: studentDoc.id });
+                                  totalFixed++;
+                                }
+                              }
+
+                              // Update student doc if parentUid is missing or different
+                              if (studentData.parentUid !== parentUid) {
+                                await updateDoc(studentDoc.ref, { parentUid });
+                                totalFixed++;
+                              }
+                            }
+                          }
+                        }
+                        await signOut(secondaryAuth);
+                        alert(`Maintenance complete! Synchronized ${totalFixed} records.`);
+                      } catch (err) {
+                        console.error(err);
+                        alert("Maintenance failed: " + (err instanceof Error ? err.message : "Unknown error"));
+                      } finally {
+                        setIsLoading(false);
+                      }
+                    }}
+                    disabled={isLoading}
+                    className="flex items-center justify-center gap-2 rounded-xl border border-emerald-600 px-6 py-3 text-sm font-bold text-emerald-600 hover:bg-emerald-50 disabled:opacity-50"
+                  >
+                    <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+                    {isLoading ? "Synchronizing..." : "Fix Parent Accounts & Links"}
+                  </button>
+                  <button className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-6 py-3 text-sm font-bold text-slate-600 hover:bg-slate-50">
+                    <RefreshCw className="h-4 w-4" />
+                    Generate Full Backup
+                  </button>
+                </div>
               </div>
             </div>
           )}
