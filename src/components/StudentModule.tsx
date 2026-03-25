@@ -93,6 +93,7 @@ export default function StudentModule({ schoolId }: { schoolId?: string }) {
             parentUid = userCredential.user.uid;
             
             await setDoc(doc(db, "users", parentUid), {
+              uid: parentUid,
               name: `${formData.name}'s Parent`,
               email: virtualEmail,
               username: finalParentUsername,
@@ -209,6 +210,7 @@ export default function StudentModule({ schoolId }: { schoolId?: string }) {
                 parentUid = userCredential.user.uid;
                 
                 await setDoc(doc(db, "users", parentUid), {
+                  uid: parentUid,
                   name: `${studentData.name}'s Parent`,
                   email: virtualEmail,
                   username: studentData.parentUsername,

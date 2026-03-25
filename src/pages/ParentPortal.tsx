@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { 
   LayoutDashboard, 
   Calendar, 
@@ -194,16 +195,20 @@ const translations = {
 };
 
 export default function ParentPortal() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("Overview");
   const [lang, setLang] = useState<"en" | "ur">("en");
-  const { profile, logout } = useAuth();
+  const { profile, logout, loading: authLoading } = useAuth();
   const t = translations[lang];
 
   const sidebarItems = [
     { name: "Overview", label: t.dashboard, icon: LayoutDashboard },
+    { name: "Attendance", label: t.attendance, icon: Calendar },
+    { name: "Homework", label: t.homework, icon: BookOpen },
     { name: "Results", label: t.results, icon: FileText },
     { name: "Timetable", label: t.timetable, icon: TableIcon },
     { name: "Date Sheet", label: t.dateSheet, icon: FileSpreadsheet },
+    { name: "Fees", label: t.fees, icon: CreditCard },
     { name: "Settings", label: t.settings, icon: Settings },
   ];
 
@@ -218,8 +223,12 @@ export default function ParentPortal() {
   const currentStudent = selectedChild;
 
   useEffect(() => {
-    if (!profile) return;
-    if (!profile.schoolId || profile.role !== 'parent') {
+    if (authLoading) return;
+    if (!profile) {
+      navigate("/login");
+      return;
+    }
+    if (!profile?.schoolId || profile.role !== 'parent' || !profile.uid) {
       setIsLoading(false);
       return;
     }
@@ -246,6 +255,8 @@ export default function ParentPortal() {
     );
     const unsubNotices = onSnapshot(qNotices, (snapshot) => {
       setNotices(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.error("Error fetching notices:", error);
     });
 
     return () => {
@@ -264,6 +275,8 @@ export default function ParentPortal() {
     );
     const unsubTimetable = onSnapshot(qTimetable, (snapshot) => {
       setTimetableData(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.error("Error fetching timetable:", error);
     });
 
     // Fetch Date Sheet for the student's class
@@ -273,6 +286,8 @@ export default function ParentPortal() {
     );
     const unsubDateSheet = onSnapshot(qDateSheet, (snapshot) => {
       setDateSheetData(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.error("Error fetching datesheet:", error);
     });
 
     return () => {
@@ -311,14 +326,14 @@ export default function ParentPortal() {
     }
 
     // Mock results if not present in DB yet, or use real ones if we had a results collection
-    const results = currentStudent.results || [
+    const results = Array.isArray(currentStudent.results) ? currentStudent.results : [
       { subject: "Mathematics", marks: 0, total: 100, grade: "N/A" },
       { subject: "English", marks: 0, total: 100, grade: "N/A" },
     ];
 
     const resultsChartData = results.map((r: any) => ({
-      subject: r.subject.split(' ')[0],
-      marks: r.marks
+      subject: (r.subject || "Unknown").split(' ')[0],
+      marks: r.marks || 0
     }));
 
     switch (activeTab) {

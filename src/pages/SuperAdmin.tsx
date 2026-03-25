@@ -134,6 +134,7 @@ export default function SuperAdmin() {
 
       // 3. Create the user profile in Firestore
       await setDoc(doc(db, "users", uid), {
+        uid,
         email: newSchool.email,
         name: newSchool.principal,
         role: "school",
@@ -754,6 +755,7 @@ export default function SuperAdmin() {
                                   parentUid = userCredential.user.uid;
                                   
                                   await setDoc(doc(db, "users", parentUid), {
+                                    uid: parentUid,
                                     name: `${studentData.name}'s Parent`,
                                     email: virtualEmail,
                                     username: parentUsername,
