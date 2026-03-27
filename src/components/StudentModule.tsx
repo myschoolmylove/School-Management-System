@@ -298,6 +298,27 @@ export default function StudentModule({ schoolId }: { schoolId?: string }) {
         </div>
         <div className="flex items-center gap-2">
           <button 
+            onClick={async () => {
+              if (!schoolId) return;
+              const seedData = [
+                { name: "Ali Raza", rollNo: "1001", class: "Class 1", section: "A", fatherName: "Raza Ahmad", parentUsername: "1001", status: "Active", phone: "03001112223", bloodGroup: "O+" },
+                { name: "Zoya Khan", rollNo: "1002", class: "Class 1", section: "A", fatherName: "Khan Malik", parentUsername: "1002", status: "Active", phone: "03004445556", bloodGroup: "A+" },
+                { name: "Hamza Malik", rollNo: "1003", class: "Class 2", section: "B", fatherName: "Malik Ahmad", parentUsername: "1003", status: "Active", phone: "03007778889", bloodGroup: "B+" }
+              ];
+              for (const data of seedData) {
+                await addDoc(collection(db, "schools", schoolId, "students"), { 
+                  ...data, 
+                  schoolId,
+                  createdAt: serverTimestamp() 
+                });
+              }
+              alert("Seed students added!");
+            }}
+            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+          >
+            Seed Data
+          </button>
+          <button 
             onClick={downloadTemplate}
             className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
           >

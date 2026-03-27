@@ -20,10 +20,11 @@ interface StudentResult {
   examName: string;
 }
 
-export default function SchoolResultsModule({ schoolId }: { schoolId?: string }) {
+export default function SchoolResultsModule({ schoolId, initialTab = "manage" }: { schoolId?: string, initialTab?: "manage" | "entry" }) {
   const [results, setResults] = useState<StudentResult[]>([]);
+  const [students, setStudents] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"manage" | "entry">("manage");
+  const [activeTab, setActiveTab] = useState<"manage" | "entry">(initialTab);
   const [search, setSearch] = useState("");
   const [selectedResult, setSelectedResult] = useState<StudentResult | null>(null);
   const [selectedClass, setSelectedClass] = useState("Class 1");
@@ -36,34 +37,66 @@ export default function SchoolResultsModule({ schoolId }: { schoolId?: string })
 
   useEffect(() => {
     if (!schoolId) return;
-    const q = query(
+    setIsLoading(true);
+
+    // Fetch Students for the class
+    const qStudents = query(
+      collection(db, "schools", schoolId, "students"),
+      where("class", "==", selectedClass)
+    );
+    const unsubStudents = onSnapshot(qStudents, (snapshot) => {
+      setStudents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    // Fetch Results for the class/exam
+    const qResults = query(
       collection(db, "schools", schoolId, "results"),
       where("class", "==", selectedClass),
       where("examName", "==", selectedExam)
     );
     
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubResults = onSnapshot(qResults, (snapshot) => {
       const resultList = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as StudentResult[];
       setResults(resultList);
       setIsLoading(false);
+    }, (err) => {
+      console.error("Error fetching results:", err);
+      setIsLoading(false);
     });
-    return () => unsubscribe();
+
+    return () => {
+      unsubStudents();
+      unsubResults();
+    };
   }, [schoolId, selectedClass, selectedExam]);
 
-  const handleMarkChange = async (id: string, subject: string, value: string) => {
+  const handleMarkChange = async (studentId: string, studentName: string, rollNo: string, subject: string, value: string) => {
     const numValue = parseInt(value) || 0;
     try {
-      const result = results.find(s => s.id === id);
-      if (!result) return;
-
-      const newMarks = { ...result.marks, [subject]: numValue };
-      await updateDoc(doc(db, "schools", schoolId!, "results", id), {
-        marks: newMarks,
-        updatedAt: serverTimestamp()
-      });
+      const existingResult = results.find(r => r.id === studentId || r.rollNo === rollNo);
+      
+      if (existingResult) {
+        const newMarks = { ...existingResult.marks, [subject]: numValue };
+        await updateDoc(doc(db, "schools", schoolId!, "results", existingResult.id), {
+          marks: newMarks,
+          updatedAt: serverTimestamp()
+        });
+      } else {
+        // Create new result record
+        await setDoc(doc(db, "schools", schoolId!, "results", studentId), {
+          name: studentName,
+          rollNo: rollNo,
+          class: selectedClass,
+          examName: selectedExam,
+          marks: { [subject]: numValue },
+          status: "Draft",
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+      }
     } catch (error) {
       console.error("Error updating marks:", error);
     }
@@ -153,6 +186,11 @@ export default function SchoolResultsModule({ schoolId }: { schoolId?: string })
     s.rollNo.toLowerCase().includes(search.toLowerCase())
   );
 
+  const filteredStudents = students.filter(s => 
+    s.name.toLowerCase().includes(search.toLowerCase()) ||
+    s.rollNo.toLowerCase().includes(search.toLowerCase())
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -160,25 +198,37 @@ export default function SchoolResultsModule({ schoolId }: { schoolId?: string })
           <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Examination & Results</h3>
           <p className="text-sm font-medium text-slate-500">Manage student marks, generate result cards, and publish reports.</p>
         </div>
-        <div className="flex items-center gap-2 rounded-2xl bg-slate-100 p-1">
-          <button
-            onClick={() => setActiveTab("manage")}
-            className={cn(
-              "rounded-xl px-4 py-2 text-xs font-black uppercase tracking-widest transition-all",
-              activeTab === "manage" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
-            )}
-          >
-            Manage
-          </button>
-          <button
-            onClick={() => setActiveTab("entry")}
-            className={cn(
-              "rounded-xl px-4 py-2 text-xs font-black uppercase tracking-widest transition-all",
-              activeTab === "entry" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
-            )}
-          >
-            Marks Entry
-          </button>
+        <div className="flex items-center gap-4 w-full sm:w-auto">
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search students..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm focus:border-emerald-500 focus:outline-none"
+            />
+          </div>
+          <div className="flex items-center gap-2 rounded-2xl bg-slate-100 p-1 shrink-0">
+            <button
+              onClick={() => setActiveTab("manage")}
+              className={cn(
+                "rounded-xl px-4 py-2 text-xs font-black uppercase tracking-widest transition-all",
+                activeTab === "manage" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              )}
+            >
+              Manage
+            </button>
+            <button
+              onClick={() => setActiveTab("entry")}
+              className={cn(
+                "rounded-xl px-4 py-2 text-xs font-black uppercase tracking-widest transition-all",
+                activeTab === "entry" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              )}
+            >
+              Marks Entry
+            </button>
+          </div>
         </div>
       </div>
 
@@ -301,8 +351,18 @@ export default function SchoolResultsModule({ schoolId }: { schoolId?: string })
         </div>
       ) : (
         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-          <div className="bg-slate-50 px-6 py-4 border-b border-slate-200">
+          <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <h4 className="font-black text-slate-900 uppercase tracking-widest">Manual Marks Entry</h4>
+            <div className="relative w-full max-w-md">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search by name or roll no..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              />
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left">
@@ -313,21 +373,41 @@ export default function SchoolResultsModule({ schoolId }: { schoolId?: string })
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm">
-                {results.map(s => (
-                  <tr key={s.id}>
-                    <td className="px-6 py-4 font-bold text-slate-900">{s.name}</td>
-                    {subjects.map(sub => (
-                      <td key={sub} className="px-4 py-4">
-                        <input 
-                          type="number"
-                          value={s.marks[sub] || ""}
-                          onChange={(e) => handleMarkChange(s.id, sub, e.target.value)}
-                          className="w-16 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-center text-xs font-bold focus:border-emerald-500 focus:outline-none"
-                        />
-                      </td>
-                    ))}
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={subjects.length + 1} className="px-6 py-12 text-center">
+                      <Loader2 className="mx-auto h-6 w-6 animate-spin text-emerald-500" />
+                    </td>
                   </tr>
-                ))}
+                ) : filteredStudents.length === 0 ? (
+                  <tr>
+                    <td colSpan={subjects.length + 1} className="px-6 py-12 text-center text-slate-500">
+                      No students found matching your search in {selectedClass}.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredStudents.map(s => {
+                    const result = results.find(r => r.id === s.id || r.rollNo === s.rollNo);
+                    return (
+                      <tr key={s.id}>
+                        <td className="px-6 py-4">
+                          <p className="font-bold text-slate-900">{s.name}</p>
+                          <p className="text-[10px] font-mono text-slate-400 uppercase tracking-widest">{s.rollNo}</p>
+                        </td>
+                        {subjects.map(sub => (
+                          <td key={sub} className="px-4 py-4">
+                            <input 
+                              type="number"
+                              value={result?.marks?.[sub] ?? ""}
+                              onChange={(e) => handleMarkChange(s.id, s.name, s.rollNo, sub, e.target.value)}
+                              className="w-16 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-center text-xs font-bold focus:border-emerald-500 focus:outline-none"
+                            />
+                          </td>
+                        ))}
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>

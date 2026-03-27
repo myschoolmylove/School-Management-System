@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { Shield, Users, CreditCard, CheckCircle, XCircle, Search, Filter, MoreVertical, Settings, LayoutDashboard, School, RefreshCw, Plus, X, FileText } from "lucide-react";
+import { Shield, Users, CreditCard, CheckCircle, XCircle, Search, Filter, MoreVertical, Settings, LayoutDashboard, School, RefreshCw, Plus, X, FileText, GraduationCap, Menu } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/src/lib/utils";
 import { db, auth } from "../firebase";
-import { collection, addDoc, getDocs, query, where, doc, updateDoc, setDoc, onSnapshot, orderBy, limit } from "firebase/firestore";
+import { collection, addDoc, getDocs, query, where, doc, updateDoc, setDoc, onSnapshot, orderBy, limit, deleteDoc } from "firebase/firestore";
 import { createUserWithEmailAndPassword, onAuthStateChanged, getAuth, signOut } from "firebase/auth";
 import { initializeApp, getApp, getApps } from "firebase/app";
 import firebaseConfig from "../../firebase-applet-config.json";
@@ -26,6 +26,7 @@ export default function SuperAdmin() {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("Dashboard");
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditLicenseModalOpen, setIsEditLicenseModalOpen] = useState(false);
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
@@ -52,6 +53,13 @@ export default function SuperAdmin() {
         return;
       }
       
+      // Super Admin check
+      if (user.email !== "ernestvdavid@gmail.com") {
+        alert("Unauthorized access. Super Admin only.");
+        window.location.href = "/";
+        return;
+      }
+      
       const unsubscribeSchools = onSnapshot(collection(db, "schools"), (snapshot) => {
         setSchools(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         setLoading(false);
@@ -73,6 +81,8 @@ export default function SuperAdmin() {
           // Initialize config if it doesn't exist
           setDoc(doc(db, "system_config", "settings"), { basePrice: 30, maintenanceMode: false });
         }
+      }, (err) => {
+        console.error("Error fetching system config:", err);
       });
 
       return () => {
@@ -99,14 +109,38 @@ export default function SuperAdmin() {
   };
 
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [publicAdmissions, setPublicAdmissions] = useState<any[]>([]);
+  const [publicApplications, setPublicApplications] = useState<any[]>([]);
+  const [publicResults, setPublicResults] = useState<any[]>([]);
 
   useEffect(() => {
-    if (activeTab === "Audit Logs") {
-      const q = query(collection(db, "audit_logs"), orderBy("timestamp", "desc"), limit(100));
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        setAuditLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    if (activeTab === "Public Admissions") {
+      const qAdm = query(collection(db, "public_admissions"), orderBy("deadline", "desc"));
+      const unsubscribeAdm = onSnapshot(qAdm, (snapshot) => {
+        setPublicAdmissions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      }, (err) => {
+        console.error("Error fetching public admissions:", err);
       });
-      return () => unsubscribe();
+
+      const qApp = query(collection(db, "public_applications"), orderBy("createdAt", "desc"));
+      const unsubscribeApp = onSnapshot(qApp, (snapshot) => {
+        setPublicApplications(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      }, (err) => {
+        console.error("Error fetching public applications:", err);
+      });
+
+      const qRes = query(collection(db, "public_results"), limit(50));
+      const unsubscribeRes = onSnapshot(qRes, (snapshot) => {
+        setPublicResults(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      }, (err) => {
+        console.error("Error fetching public results:", err);
+      });
+
+      return () => {
+        unsubscribeAdm();
+        unsubscribeApp();
+        unsubscribeRes();
+      };
     }
   }, [activeTab]);
 
@@ -202,7 +236,70 @@ export default function SuperAdmin() {
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      {/* Sidebar */}
+      {/* Mobile Sidebar Drawer */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
+            />
+            <motion.aside
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="fixed inset-y-0 left-0 z-50 flex w-72 flex-col bg-slate-900 text-white shadow-2xl lg:hidden"
+            >
+              <div className="flex h-16 items-center justify-between border-b border-white/10 px-6">
+                <div className="flex items-center">
+                  <Shield className="mr-3 h-6 w-6 text-emerald-400" />
+                  <span className="text-lg font-bold">Super Admin</span>
+                </div>
+                <button 
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="rounded-lg p-2 text-slate-400 hover:bg-white/5 hover:text-white"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+              <nav className="flex-1 overflow-y-auto space-y-1 px-4 py-6">
+                {[
+                  { name: "Dashboard", icon: LayoutDashboard },
+                  { name: "Schools", icon: School },
+                  { name: "Licensing", icon: CreditCard },
+                  { name: "Public Admissions", icon: GraduationCap },
+                  { name: "Users", icon: Users },
+                  { name: "Audit Logs", icon: FileText },
+                  { name: "Settings", icon: Settings },
+                ].map((item) => (
+                  <button
+                    key={item.name}
+                    onClick={() => {
+                      setActiveTab(item.name);
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={cn(
+                      "group flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors",
+                      activeTab === item.name
+                        ? "bg-emerald-600 text-white"
+                        : "text-slate-400 hover:bg-white/5 hover:text-white"
+                    )}
+                  >
+                    <item.icon className="h-5 w-5" />
+                    {item.name}
+                  </button>
+                ))}
+              </nav>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Sidebar (Desktop) */}
       <aside className="hidden w-64 flex-col border-r border-black/5 bg-slate-900 text-white lg:flex">
         <div className="flex h-16 items-center border-b border-white/10 px-6">
           <Shield className="mr-3 h-6 w-6 text-emerald-400" />
@@ -213,6 +310,7 @@ export default function SuperAdmin() {
             { name: "Dashboard", icon: LayoutDashboard },
             { name: "Schools", icon: School },
             { name: "Licensing", icon: CreditCard },
+            { name: "Public Admissions", icon: GraduationCap },
             { name: "Users", icon: Users },
             { name: "Audit Logs", icon: FileText },
             { name: "Settings", icon: Settings },
@@ -235,15 +333,24 @@ export default function SuperAdmin() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1">
-        <header className="flex h-16 items-center justify-between border-b border-black/5 bg-white px-8">
-          <h2 className="text-xl font-bold text-slate-900">{activeTab} Management</h2>
+      <main className="flex-1 overflow-x-hidden">
+        <header className="flex h-16 items-center justify-between border-b border-black/5 bg-white px-4 sm:px-8">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden"
+            >
+              <Menu className="h-6 w-6" />
+            </button>
+            <h2 className="text-lg font-bold text-slate-900 sm:text-xl">{activeTab} Management</h2>
+          </div>
           <div className="flex items-center gap-4">
             <button 
               onClick={() => setIsAddModalOpen(true)}
-              className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700"
+              className="rounded-full bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 sm:text-sm"
             >
-              Add New School
+              <span className="hidden sm:inline">Add New School</span>
+              <Plus className="h-4 w-4 sm:hidden" />
             </button>
           </div>
         </header>
@@ -591,6 +698,208 @@ export default function SuperAdmin() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "Public Admissions" && (
+            <div className="space-y-8">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-bold text-slate-900">Public Admission Notices</h3>
+                <button 
+                  onClick={async () => {
+                    const title = window.prompt("Enter Admission Title:");
+                    if (!title) return;
+                    const type = window.prompt("Enter Type (School/College/University):", "School");
+                    const location = window.prompt("Enter Location:", "Lahore");
+                    const deadline = window.prompt("Enter Deadline (YYYY-MM-DD):", new Date().toISOString().split('T')[0]);
+                    const desc = window.prompt("Enter Description:");
+                    
+                    try {
+                      await addDoc(collection(db, "public_admissions"), {
+                        title, type, location, deadline, desc,
+                        createdAt: new Date().toISOString()
+                      });
+                      alert("Admission notice added!");
+                    } catch (err) {
+                      console.error(err);
+                      alert("Failed to add admission notice");
+                    }
+                  }}
+                  className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 flex items-center gap-2"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Admission Notice
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {publicAdmissions.map((adm) => (
+                  <div key={adm.id} className="rounded-2xl border border-black/5 bg-white p-6 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold uppercase text-emerald-600">
+                        {adm.type}
+                      </span>
+                      <button 
+                        onClick={async () => {
+                          if (window.confirm("Delete this admission notice?")) {
+                            await updateDoc(doc(db, "public_admissions", adm.id), { status: 'deleted' }); // Or actually delete
+                            // For simplicity in this demo, let's just delete
+                            // await deleteDoc(doc(db, "public_admissions", adm.id));
+                          }
+                        }}
+                        className="text-slate-400 hover:text-rose-600"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <h4 className="font-bold text-slate-900">{adm.title}</h4>
+                    <p className="mt-2 text-xs text-slate-500 line-clamp-2">{adm.desc}</p>
+                    <div className="mt-4 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      <span>{adm.location}</span>
+                      <span className="text-rose-600">Deadline: {adm.deadline}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-12">
+                <h3 className="text-xl font-bold text-slate-900 mb-6">Public Applications</h3>
+                <div className="rounded-2xl border border-black/5 bg-white shadow-sm overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead className="bg-slate-50 text-xs font-bold uppercase tracking-wider text-slate-400">
+                        <tr>
+                          <th className="px-6 py-4">Student</th>
+                          <th className="px-6 py-4">Parent</th>
+                          <th className="px-6 py-4">Contact</th>
+                          <th className="px-6 py-4">Admission</th>
+                          <th className="px-6 py-4">Status</th>
+                          <th className="px-6 py-4">Date</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50 text-sm">
+                        {publicApplications.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="px-6 py-12 text-center text-slate-400">No applications received yet.</td>
+                          </tr>
+                        ) : publicApplications.map((app) => (
+                          <tr key={app.id} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="px-6 py-4">
+                              <div className="font-bold text-slate-900">{app.studentName}</div>
+                              <div className="text-xs text-slate-500">{app.class}</div>
+                            </td>
+                            <td className="px-6 py-4 text-slate-600">{app.parentName}</td>
+                            <td className="px-6 py-4">
+                              <div className="text-slate-900 font-medium">{app.phone}</div>
+                              <div className="text-xs text-slate-500">{app.email}</div>
+                            </td>
+                            <td className="px-6 py-4 text-slate-600 max-w-[200px] truncate">{app.admissionTitle}</td>
+                            <td className="px-6 py-4">
+                              <select 
+                                value={app.status}
+                                onChange={async (e) => {
+                                  await updateDoc(doc(db, "public_applications", app.id), { status: e.target.value });
+                                }}
+                                className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                              >
+                                <option value="Received">Received</option>
+                                <option value="Contacted">Contacted</option>
+                                <option value="Closed">Closed</option>
+                              </select>
+                            </td>
+                            <td className="px-6 py-4 text-slate-500">
+                              {app.createdAt?.toDate ? app.createdAt.toDate().toLocaleDateString() : new Date(app.createdAt).toLocaleDateString()}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-12">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold text-slate-900">Public Board Results</h3>
+                  <button 
+                    onClick={async () => {
+                      const rollNo = window.prompt("Enter Roll Number:");
+                      if (!rollNo) return;
+                      const studentName = window.prompt("Enter Student Name:");
+                      const board = window.prompt("Enter Board (e.g. BISE Lahore):", "BISE Lahore");
+                      const year = window.prompt("Enter Year (e.g. 2026):", "2026");
+                      const session = window.prompt("Enter Session (Annual/Supplementary):", "Annual");
+                      const marks = Number(window.prompt("Enter Marks:", "0"));
+                      const totalMarks = Number(window.prompt("Enter Total Marks:", "1100"));
+                      const grade = window.prompt("Enter Grade (e.g. A+):", "A");
+                      
+                      try {
+                        await addDoc(collection(db, "public_results"), {
+                          rollNo, studentName, board, year, session, marks, totalMarks, grade,
+                          status: marks >= (totalMarks * 0.33) ? "Pass" : "Fail",
+                          createdAt: new Date().toISOString()
+                        });
+                        alert("Result added!");
+                      } catch (err) {
+                        console.error(err);
+                        alert("Failed to add result");
+                      }
+                    }}
+                    className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 flex items-center gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Result
+                  </button>
+                </div>
+                <div className="rounded-2xl border border-black/5 bg-white shadow-sm overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead className="bg-slate-50 text-xs font-bold uppercase tracking-wider text-slate-400">
+                        <tr>
+                          <th className="px-6 py-4">Roll No</th>
+                          <th className="px-6 py-4">Student Name</th>
+                          <th className="px-6 py-4">Board / Year</th>
+                          <th className="px-6 py-4">Marks</th>
+                          <th className="px-6 py-4">Grade</th>
+                          <th className="px-6 py-4">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50 text-sm">
+                        {publicResults.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="px-6 py-12 text-center text-slate-400">No results found.</td>
+                          </tr>
+                        ) : publicResults.map((res) => (
+                          <tr key={res.id}>
+                            <td className="px-6 py-4 font-bold text-slate-900">{res.rollNo}</td>
+                            <td className="px-6 py-4 text-slate-600">{res.studentName}</td>
+                            <td className="px-6 py-4 text-slate-600">
+                              <div className="font-bold">{res.board}</div>
+                              <div className="text-xs">{res.year} ({res.session})</div>
+                            </td>
+                            <td className="px-6 py-4 text-slate-600">{res.marks}/{res.totalMarks}</td>
+                            <td className="px-6 py-4">
+                              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-600">{res.grade}</span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <button 
+                                onClick={async () => {
+                                  if (window.confirm("Delete this result?")) {
+                                    await deleteDoc(doc(db, "public_results", res.id));
+                                  }
+                                }}
+                                className="text-slate-400 hover:text-rose-600"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             </div>

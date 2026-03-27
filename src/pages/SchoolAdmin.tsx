@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { LayoutDashboard, Users, CreditCard, Calendar, BookOpen, Settings, Bell, Search, MessageCircle, GraduationCap, Shield, Layers, FileText, UserPlus, Image as ImageIcon, Upload, Plus, XCircle, RefreshCw, Menu, History, Package, QrCode, Fingerprint, Smartphone, Clock } from "lucide-react";
+import { LayoutDashboard, Users, CreditCard, Calendar, BookOpen, Settings, Bell, Search, MessageCircle, GraduationCap, Shield, Layers, FileText, UserPlus, Image as ImageIcon, Upload, Plus, XCircle, RefreshCw, Menu, X, History, Package, QrCode, Fingerprint, Smartphone, Clock, Edit2, Sparkles } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { useAuth } from "../contexts/AuthContext";
 import { db, auth } from "../firebase";
@@ -25,7 +25,9 @@ import EventsModule from "@/src/components/EventsModule";
 import AdmissionsModule from "@/src/components/AdmissionsModule";
 import NoticesModule from "@/src/components/NoticesModule";
 import SettingsModule from "@/src/components/SettingsModule";
+import AISearchModule from "@/src/components/AISearchModule";
 import * as XLSX from 'xlsx';
+import { motion, AnimatePresence } from "motion/react";
 
 const sidebarItems = [
   { name: "Overview", icon: LayoutDashboard },
@@ -34,7 +36,7 @@ const sidebarItems = [
   { name: "Teachers", icon: GraduationCap },
   { name: "Classes", icon: Layers },
   { name: "Timetables", icon: Clock },
-  { name: "Marks Entry", icon: FileText },
+  { name: "Marks Entry", icon: Edit2 },
   { name: "Results", icon: FileText },
   { name: "Finance", icon: CreditCard },
   { name: "Fees", icon: CreditCard },
@@ -48,6 +50,7 @@ const sidebarItems = [
   { name: "Events", icon: Bell },
   { name: "Admissions", icon: BookOpen },
   { name: "Notices", icon: Bell },
+  { name: "AI Search", icon: Sparkles },
   { name: "Settings", icon: Settings },
 ];
 
@@ -55,9 +58,15 @@ export default function SchoolAdmin() {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("Overview");
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [schoolStatus, setSchoolStatus] = useState<string>("Active");
   const [schoolData, setSchoolData] = useState<any>(null);
   const [studentCount, setStudentCount] = useState(0);
+  const [teacherCount, setTeacherCount] = useState(0);
+  const [totalFeesCollected, setTotalFeesCollected] = useState(0);
+  const [whatsappAlertsCount, setWhatsappAlertsCount] = useState(0);
+  const [recentNotices, setRecentNotices] = useState<any[]>([]);
+  const [feeTrend, setFeeTrend] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
@@ -65,25 +74,96 @@ export default function SchoolAdmin() {
         navigate("/login");
         return;
       }
+      
+      // Admin check
+      if (profile && profile.role !== "admin" && profile.role !== "super") {
+        alert("Unauthorized access. Admin only.");
+        navigate("/");
+        return;
+      }
     });
 
     if (profile?.schoolId) {
-      const unsubscribeSchool = onSnapshot(doc(db, "schools", profile.schoolId), (doc) => {
+      const schoolId = profile.schoolId;
+
+      const unsubscribeSchool = onSnapshot(doc(db, "schools", schoolId), (doc) => {
         if (doc.exists()) {
           const data = doc.data();
           setSchoolData(data);
           setSchoolStatus(data.status);
         }
+      }, (err) => {
+        console.error("Error fetching school data:", err);
       });
 
-      const unsubscribeStudents = onSnapshot(collection(db, "schools", profile.schoolId, "students"), (snapshot) => {
+      const unsubscribeStudents = onSnapshot(collection(db, "schools", schoolId, "students"), (snapshot) => {
         setStudentCount(snapshot.size);
+      }, (err) => {
+        console.error("Error fetching student count:", err);
+      });
+
+      const unsubscribeTeachers = onSnapshot(collection(db, "schools", schoolId, "teachers"), (snapshot) => {
+        setTeacherCount(snapshot.size);
+      }, (err) => {
+        console.error("Error fetching teacher count:", err);
+      });
+
+      const unsubscribeFees = onSnapshot(collection(db, "schools", schoolId, "vouchers"), (snapshot) => {
+        let total = 0;
+        const dailyTrend = [0, 0, 0, 0, 0, 0, 0];
+        const now = new Date();
+        
+        snapshot.docs.forEach(doc => {
+          const data = doc.data();
+          if (data.status === "Paid") {
+            const amount = Number(data.amount) || 0;
+            total += amount;
+
+            // Trend calculation (last 7 days)
+            if (data.updatedAt) {
+              const paidDate = data.updatedAt.toDate();
+              const diffDays = Math.floor((now.getTime() - paidDate.getTime()) / (1000 * 60 * 60 * 24));
+              if (diffDays >= 0 && diffDays < 7) {
+                dailyTrend[6 - diffDays] += amount;
+              }
+            }
+          }
+        });
+        setTotalFeesCollected(total);
+        setFeeTrend(dailyTrend);
+      }, (err) => {
+        console.error("Error fetching fees:", err);
+      });
+
+      const unsubscribeNotices = onSnapshot(collection(db, "schools", schoolId, "notices"), (snapshot) => {
+        const notices = snapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .sort((a: any, b: any) => (b.date?.seconds || 0) - (a.date?.seconds || 0))
+          .slice(0, 3);
+        setRecentNotices(notices);
+      }, (err) => {
+        console.error("Error fetching notices:", err);
+      });
+
+      // Fetch WhatsApp alerts from audit logs
+      const unsubscribeAudit = onSnapshot(collection(db, "audit_logs"), (snapshot) => {
+        const count = snapshot.docs.filter(doc => {
+          const data = doc.data();
+          return data.schoolId === schoolId && data.action?.toLowerCase().includes("whatsapp");
+        }).length;
+        setWhatsappAlertsCount(count);
+      }, (err) => {
+        console.error("Error fetching audit logs:", err);
       });
 
       return () => {
         unsubscribeAuth();
         unsubscribeSchool();
         unsubscribeStudents();
+        unsubscribeTeachers();
+        unsubscribeFees();
+        unsubscribeNotices();
+        unsubscribeAudit();
       };
     }
     return () => unsubscribeAuth();
@@ -98,23 +178,6 @@ export default function SchoolAdmin() {
   const discountedRate = baseRate * (1 - discount / 100);
   const calculatedBill = studentCount * discountedRate;
   const monthlyPrice = schoolData?.monthlyPrice || calculatedBill;
-
-  const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-        const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
-        const wsname = wb.SheetNames[0];
-        const ws = wb.Sheets[wsname];
-        const data = XLSX.utils.sheet_to_json(ws);
-        console.log("Uploaded Marks Data:", data);
-        alert("Marks uploaded successfully from Excel!");
-      };
-      reader.readAsBinaryString(file);
-    }
-  };
 
   const refreshUserPassword = (userName: string, role: string) => {
     alert(`Password for ${role} ${userName} has been refreshed to default: ${role}@123`);
@@ -146,9 +209,9 @@ export default function SchoolAdmin() {
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
               {[
                 { label: "Total Students", value: studentCount.toLocaleString(), change: "+12%", icon: Users, color: "text-blue-600 bg-blue-50" },
-                { label: "Fee Collected", value: "Rs 4.2M", change: "+8%", icon: CreditCard, color: "text-emerald-600 bg-emerald-50" },
-                { label: "Active Teachers", value: "48", change: "0%", icon: GraduationCap, color: "text-purple-600 bg-purple-50" },
-                { label: "WhatsApp Alerts", value: "842", change: "+24%", icon: MessageCircle, color: "text-green-600 bg-green-50" },
+                { label: "Fee Collected", value: `Rs ${(totalFeesCollected / 1000000).toFixed(1)}M`, change: "+8%", icon: CreditCard, color: "text-emerald-600 bg-emerald-50" },
+                { label: "Active Teachers", value: teacherCount.toString(), change: "0%", icon: GraduationCap, color: "text-purple-600 bg-purple-50" },
+                { label: "WhatsApp Alerts", value: whatsappAlertsCount.toString(), change: "+24%", icon: MessageCircle, color: "text-green-600 bg-green-50" },
               ].map((stat) => (
                 <div key={stat.label} className="rounded-2xl border border-black/5 bg-white p-6 shadow-sm">
                   <div className="flex items-center justify-between">
@@ -168,9 +231,13 @@ export default function SchoolAdmin() {
               <div className="col-span-1 rounded-2xl border border-black/5 bg-white p-6 shadow-sm lg:col-span-2">
                 <h3 className="text-lg font-bold text-slate-900">Fee Collection Trend</h3>
                 <div className="mt-8 flex h-64 items-end gap-4">
-                  {[40, 60, 45, 80, 55, 90, 70].map((h, i) => (
-                    <div key={i} className="flex-1 rounded-t-lg bg-emerald-500" style={{ height: `${h}%` }} />
-                  ))}
+                  {feeTrend.map((amount, i) => {
+                    const max = Math.max(...feeTrend, 1);
+                    const h = (amount / max) * 100;
+                    return (
+                      <div key={i} className="flex-1 rounded-t-lg bg-emerald-500 transition-all duration-500" style={{ height: `${Math.max(h, 5)}%` }} title={`Rs ${amount}`} />
+                    );
+                  })}
                 </div>
                 <div className="mt-4 flex justify-between text-xs font-medium text-slate-400">
                   <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
@@ -180,21 +247,28 @@ export default function SchoolAdmin() {
               <div className="rounded-2xl border border-black/5 bg-white p-6 shadow-sm">
                 <h3 className="text-lg font-bold text-slate-900">Recent Notices</h3>
                 <div className="mt-6 space-y-4">
-                  {[
-                    { title: "Summer Vacation", date: "2 hours ago", type: "Holiday" },
-                    { title: "Parent Teacher Meeting", date: "Yesterday", type: "Event" },
-                    { title: "Fee Reminder Sent", date: "2 days ago", type: "Finance" },
-                  ].map((notice) => (
-                    <div key={notice.title} className="flex items-start gap-3 border-b border-slate-50 pb-4 last:border-0 last:pb-0">
-                      <div className="mt-1 h-2 w-2 rounded-full bg-emerald-500" />
-                      <div>
-                        <p className="text-sm font-bold text-slate-900">{notice.title}</p>
-                        <p className="text-xs text-slate-500">{notice.date} • {notice.type}</p>
+                  {recentNotices.length === 0 ? (
+                    <p className="text-sm text-slate-500 text-center py-4">No recent notices</p>
+                  ) : (
+                    recentNotices.map((notice) => (
+                      <div key={notice.id} className="flex items-start gap-3 border-b border-slate-50 pb-4 last:border-0 last:pb-0">
+                        <div className="mt-1 h-2 w-2 rounded-full bg-emerald-500" />
+                        <div>
+                          <p className="text-sm font-bold text-slate-900">{notice.title}</p>
+                          <p className="text-xs text-slate-500">
+                            {notice.date?.toDate ? notice.date.toDate().toLocaleDateString() : 'Just now'} • {notice.category || 'General'}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
-                <button className="mt-6 w-full rounded-lg bg-slate-50 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">View All Notices</button>
+                <button 
+                  onClick={() => setActiveTab("Notices")}
+                  className="mt-6 w-full rounded-lg bg-slate-50 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"
+                >
+                  View All Notices
+                </button>
               </div>
             </div>
           </div>
@@ -212,7 +286,7 @@ export default function SchoolAdmin() {
       case "Finance":
         return <FinanceModule schoolId={profile?.schoolId} />;
       case "Results":
-        return <SchoolResultsModule schoolId={profile?.schoolId} />;
+        return <SchoolResultsModule schoolId={profile?.schoolId} initialTab="manage" />;
       case "Fees":
         return <FeeModule schoolId={profile?.schoolId} />;
       case "User Roles":
@@ -228,57 +302,7 @@ export default function SchoolAdmin() {
       case "Biometrics":
         return <BiometricModule schoolId={profile?.schoolId} />;
       case "Marks Entry":
-        return (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xl font-bold text-slate-900">Marks Entry</h3>
-              <div className="flex gap-4">
-                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50">
-                  <Upload className="h-4 w-4" />
-                  Upload Excel
-                  <input type="file" className="hidden" accept=".xlsx, .xls" onChange={handleExcelUpload} />
-                </label>
-                <button className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700">
-                  <Plus className="h-4 w-4" />
-                  Add Manual Entry
-                </button>
-              </div>
-            </div>
-            <div className="rounded-2xl border border-black/5 bg-white shadow-sm overflow-hidden">
-              <table className="w-full text-left">
-                <thead className="bg-slate-50 text-xs font-bold uppercase tracking-wider text-slate-400">
-                  <tr>
-                    <th className="px-6 py-4">Student Name</th>
-                    <th className="px-6 py-4">Roll No</th>
-                    <th className="px-6 py-4">Subject</th>
-                    <th className="px-6 py-4">Marks</th>
-                    <th className="px-6 py-4">Total</th>
-                    <th className="px-6 py-4">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50 text-sm">
-                  {[
-                    { name: "Ali Ahmad", rollNo: "101", subject: "Mathematics", marks: 85, total: 100 },
-                    { name: "Sara Khan", rollNo: "102", subject: "Mathematics", marks: 92, total: 100 },
-                  ].map((row, i) => (
-                    <tr key={i}>
-                      <td className="px-6 py-4 font-medium text-slate-900">{row.name}</td>
-                      <td className="px-6 py-4 text-slate-600">{row.rollNo}</td>
-                      <td className="px-6 py-4 text-slate-600">{row.subject}</td>
-                      <td className="px-6 py-4">
-                        <input type="number" defaultValue={row.marks} className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-center focus:border-emerald-500 focus:outline-none" />
-                      </td>
-                      <td className="px-6 py-4 text-slate-600">{row.total}</td>
-                      <td className="px-6 py-4">
-                        <button className="text-emerald-600 hover:underline">Save</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        );
+        return <SchoolResultsModule schoolId={profile?.schoolId} initialTab="entry" />;
       case "Gallery":
         return <GalleryModule schoolId={profile?.schoolId} />;
       case "Events":
@@ -287,6 +311,8 @@ export default function SchoolAdmin() {
         return <AdmissionsModule schoolId={profile?.schoolId} />;
       case "Notices":
         return <NoticesModule schoolId={profile?.schoolId} />;
+      case "AI Search":
+        return <AISearchModule />;
       case "Settings":
         return <SettingsModule schoolId={profile?.schoolId} />;
       default:
@@ -308,7 +334,88 @@ export default function SchoolAdmin() {
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      {/* Sidebar */}
+      {/* Mobile Sidebar Drawer */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
+            />
+            <motion.aside
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="fixed inset-y-0 left-0 z-50 flex w-72 flex-col bg-white shadow-2xl lg:hidden"
+            >
+              <div className="flex h-16 items-center justify-between border-b border-black/5 px-6">
+                <span className="text-lg font-bold text-slate-900">Admin Panel</span>
+                <button 
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="rounded-lg p-2 text-slate-400 hover:bg-slate-50 hover:text-slate-600"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+              <nav className="flex-1 overflow-y-auto space-y-1 px-4 py-4">
+                {sidebarItems.map((item) => {
+                  const isLocked = (() => {
+                    if (currentPlan === "Free") {
+                      return ["Finance", "Fees", "Inventory", "Biometrics", "Audit Logs", "Admissions", "Events", "User Roles", "Settings"].includes(item.name);
+                    }
+                    if (currentPlan === "Standard") {
+                      return ["Finance", "Inventory", "Biometrics", "Audit Logs"].includes(item.name);
+                    }
+                    return false;
+                  })();
+                  return (
+                    <button
+                      key={item.name}
+                      onClick={() => {
+                        if (!isLocked) {
+                          setActiveTab(item.name);
+                          setIsMobileMenuOpen(false);
+                        }
+                      }}
+                      className={cn(
+                        "group flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                        activeTab === item.name
+                          ? "bg-emerald-50 text-emerald-600"
+                          : "text-slate-600 hover:bg-slate-50 hover:text-slate-900",
+                        isLocked && "cursor-not-allowed opacity-50"
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <item.icon className="h-5 w-5" />
+                        {item.name}
+                      </div>
+                      {isLocked && <Shield className="h-4 w-4 text-slate-400" />}
+                    </button>
+                  );
+                })}
+              </nav>
+              
+              <div className="border-t border-black/5 p-4">
+                <div className="flex items-center gap-3 rounded-lg bg-slate-900 p-3 text-white">
+                  <div className="h-8 w-8 rounded-full bg-emerald-500 flex items-center justify-center font-bold">
+                    {profile?.name?.[0] || "A"}
+                  </div>
+                  <div className="flex-1 overflow-hidden">
+                    <p className="truncate text-sm font-medium">{profile?.name || "Admin"}</p>
+                    <p className="truncate text-xs text-slate-400">{schoolData?.name || "School"}</p>
+                  </div>
+                </div>
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Sidebar (Desktop) */}
       <aside className="hidden w-64 flex-col border-r border-black/5 bg-white lg:flex">
         <div className="flex h-16 items-center border-b border-black/5 px-6">
           <span className="text-lg font-bold text-slate-900">Admin Panel</span>
@@ -398,12 +505,20 @@ export default function SchoolAdmin() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1">
+      <main className="flex-1 overflow-x-hidden">
         {/* Header */}
-        <header className="flex h-16 items-center justify-between border-b border-black/5 bg-white px-8">
-          <h2 className="text-xl font-bold text-slate-900">{activeTab}</h2>
+        <header className="flex h-16 items-center justify-between border-b border-black/5 bg-white px-4 sm:px-8">
           <div className="flex items-center gap-4">
-            <div className="relative">
+            <button 
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden"
+            >
+              <Menu className="h-6 w-6" />
+            </button>
+            <h2 className="text-lg font-bold text-slate-900 sm:text-xl">{activeTab}</h2>
+          </div>
+          <div className="flex items-center gap-2 sm:gap-4">
+            <div className="relative hidden sm:block">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
@@ -419,7 +534,7 @@ export default function SchoolAdmin() {
         </header>
 
         {/* Dashboard Content */}
-        <div className="p-8">
+        <div className="p-4 sm:p-8">
           {renderContent()}
         </div>
       </main>

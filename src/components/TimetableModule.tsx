@@ -107,16 +107,23 @@ export default function TimetableModule({ schoolId }: { schoolId?: string }) {
     const qTimetable = query(collection(db, "schools", schoolId, "timetables"));
     const unsubscribeTimetable = onSnapshot(qTimetable, (snapshot) => {
       setTimetables(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimetableEntry)));
+    }, (err) => {
+      console.error("Error fetching timetable:", err);
     });
 
     const qDateSheet = query(collection(db, "schools", schoolId, "datesheets"));
     const unsubscribeDateSheet = onSnapshot(qDateSheet, (snapshot) => {
       setDateSheets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DateSheetEntry)));
+    }, (err) => {
+      console.error("Error fetching datesheet:", err);
     });
 
     const qTeachers = query(collection(db, "schools", schoolId, "teachers"));
     const unsubscribeTeachers = onSnapshot(qTeachers, (snapshot) => {
       setTeachers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Teacher)));
+      setLoading(false);
+    }, (err) => {
+      console.error("Error fetching teachers for timetable:", err);
       setLoading(false);
     });
 

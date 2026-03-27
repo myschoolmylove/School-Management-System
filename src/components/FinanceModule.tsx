@@ -45,6 +45,9 @@ export default function FinanceModule({ schoolId }: { schoolId?: string }) {
       const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Transaction[];
       setTransactions(list);
       setIsLoading(false);
+    }, (err) => {
+      console.error("Error fetching finance data:", err);
+      setIsLoading(false);
     });
     return () => unsubscribe();
   }, [schoolId]);

@@ -52,6 +52,9 @@ export default function TeacherModule({ schoolId }: { schoolId?: string }) {
       })) as Teacher[];
       setTeachers(teacherList);
       setIsLoading(false);
+    }, (err) => {
+      console.error("Error fetching teachers:", err);
+      setIsLoading(false);
     });
 
     return () => unsubscribe();

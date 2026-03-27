@@ -60,6 +60,25 @@ service cloud.firestore {
     // Rules
     // ===============================================================
 
+    // Public Admissions
+    match /public_admissions/{admissionId} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    // Public Applications
+    match /public_applications/{applicationId} {
+      allow read: if isSuperAdmin();
+      allow create: if true; // Allow public to apply
+      allow update, delete: if isSuperAdmin();
+    }
+
+    // Public Results
+    match /public_results/{resultId} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
     // Users collection
     match /users/{userId} {
       allow read: if isOwner(userId) || isSuperAdmin() || 
@@ -109,6 +128,63 @@ service cloud.firestore {
         allow read: if isSchoolActive(schoolId);
         allow write: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId) || isTeacher(schoolId));
       }
+
+      // Results subcollection
+      match /results/{resultId} {
+        allow read: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId) || isTeacher(schoolId) || 
+                     (isParent(schoolId) && request.auth.uid == resource.data.parentUid));
+        allow write: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId) || isTeacher(schoolId));
+      }
+
+      // Attendance subcollection
+      match /attendance/{attendanceId} {
+        allow read: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId) || isTeacher(schoolId) || 
+                     (isParent(schoolId) && request.auth.uid == resource.data.parentUid));
+        allow write: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId) || isTeacher(schoolId));
+      }
+
+      // Vouchers subcollection
+      match /vouchers/{voucherId} {
+        allow read: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId) || 
+                     (isParent(schoolId) && request.auth.uid == resource.data.parentUid));
+        allow write: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId));
+      }
+
+      // Teachers subcollection
+      match /teachers/{teacherId} {
+        allow read: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId) || isTeacher(schoolId));
+        allow write: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId));
+      }
+
+      // Inventory subcollection
+      match /inventory/{itemId} {
+        allow read: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId));
+        allow write: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId));
+      }
+
+      // Finance subcollection
+      match /finance/{transactionId} {
+        allow read: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId));
+        allow write: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId));
+      }
+
+      // Admissions subcollection
+      match /admissions/{admissionId} {
+        allow read: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId));
+        allow write: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId));
+      }
+
+      // Notices subcollection
+      match /notices/{noticeId} {
+        allow read: if isSchoolActive(schoolId);
+        allow write: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId));
+      }
+
+      // Config subcollection
+      match /config/{configId} {
+        allow read: if isSchoolActive(schoolId);
+        allow write: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId));
+      }
     }
     
     // Audit logs
@@ -118,22 +194,16 @@ service cloud.firestore {
                    resource.data.schoolId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.schoolId);
       allow create: if isAuthenticated();
     }
-    
-    // Timetables
-    match /timetables/{id} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
-    }
-    
-    // Date Sheets
-    match /datesheets/{id} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
-    }
 
     // System Config
     match /system_config/{id} {
       allow read: if true; // Allow public read for maintenance mode check
+      allow write: if isSuperAdmin();
+    }
+
+    // Public Results
+    match /public_results/{resultId} {
+      allow read: if true;
       allow write: if isSuperAdmin();
     }
   }

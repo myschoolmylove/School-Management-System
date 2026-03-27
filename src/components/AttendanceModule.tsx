@@ -13,6 +13,7 @@ export default function AttendanceModule({ schoolId }: { schoolId?: string }) {
   const [alertsSent, setAlertsSent] = useState<Record<string, boolean>>({});
   const [isSending, setIsSending] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
 
   const classes = ["Playgroup", "Nursery", "Prep", "Class 1", "Class 2", "Class 3", "Class 4", "Class 5", "Class 6", "Class 7", "Class 8", "Class 9", "Class 10", "Class 11", "Class 12"];
 
@@ -43,6 +44,8 @@ export default function AttendanceModule({ schoolId }: { schoolId?: string }) {
         data[att.studentId] = att.status;
       });
       setAttendance(data);
+    }, (err) => {
+      console.error("Error fetching attendance:", err);
     });
     return () => unsubscribe();
   }, [schoolId, date]);
@@ -96,6 +99,11 @@ export default function AttendanceModule({ schoolId }: { schoolId?: string }) {
     late: students.filter(s => attendance[s.id] === "Late").length,
   };
 
+  const filteredStudents = students.filter(s => 
+    s.name.toLowerCase().includes(search.toLowerCase()) ||
+    s.rollNo.toLowerCase().includes(search.toLowerCase())
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -104,6 +112,16 @@ export default function AttendanceModule({ schoolId }: { schoolId?: string }) {
           <p className="text-sm font-medium text-slate-500">Mark attendance manually. No biometrics required.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search student..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm font-bold focus:border-emerald-500 focus:outline-none"
+            />
+          </div>
           <select
             value={selectedClass}
             onChange={(e) => setSelectedClass(e.target.value)}
@@ -158,10 +176,10 @@ export default function AttendanceModule({ schoolId }: { schoolId?: string }) {
             <tbody className="divide-y divide-slate-100 text-sm">
               {loading ? (
                 <tr><td colSpan={4} className="py-10 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-emerald-500" /></td></tr>
-              ) : students.length === 0 ? (
-                <tr><td colSpan={4} className="py-10 text-center text-slate-500">No students found in {selectedClass}.</td></tr>
+              ) : filteredStudents.length === 0 ? (
+                <tr><td colSpan={4} className="py-10 text-center text-slate-500">No students found matching your search.</td></tr>
               ) : (
-                students.map((s) => (
+                filteredStudents.map((s) => (
                   <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">

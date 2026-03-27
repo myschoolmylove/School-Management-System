@@ -1,5 +1,5 @@
 import React, { useState, useEffect, FormEvent } from "react";
-import { Plus, Search, Filter, Download, Trash2, Edit2, UserPlus, CheckCircle, Clock, AlertCircle, X, Loader2, DollarSign } from "lucide-react";
+import { Plus, Search, Filter, Download, Trash2, Edit2, UserPlus, CheckCircle, Clock, AlertCircle, X, Loader2, DollarSign, GraduationCap, ExternalLink } from "lucide-react";
 import { cn } from "../lib/utils";
 import { db } from "../firebase";
 import { collection, query, onSnapshot, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, orderBy } from "firebase/firestore";
@@ -21,6 +21,7 @@ export default function AdmissionsModule({ schoolId }: { schoolId?: string }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [search, setSearch] = useState("");
 
   const [formData, setFormData] = useState({
     studentName: "",
@@ -40,6 +41,9 @@ export default function AdmissionsModule({ schoolId }: { schoolId?: string }) {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Admission[];
       setAdmissions(list);
+      setIsLoading(false);
+    }, (err) => {
+      console.error("Error fetching admissions:", err);
       setIsLoading(false);
     });
     return () => unsubscribe();
@@ -85,22 +89,110 @@ export default function AdmissionsModule({ schoolId }: { schoolId?: string }) {
     }
   };
 
+  const filteredAdmissions = admissions.filter(a => 
+    a.studentName.toLowerCase().includes(search.toLowerCase()) ||
+    a.parentName.toLowerCase().includes(search.toLowerCase()) ||
+    a.phone.includes(search)
+  );
+
   return (
     <div className="space-y-8">
+      {/* FCCU Admission Card */}
+      <div className="relative overflow-hidden rounded-3xl bg-slate-900 p-8 text-white shadow-2xl">
+        <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-4">
+            <div className="inline-flex items-center gap-2 rounded-full bg-emerald-500/20 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-400 ring-1 ring-emerald-500/30">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+              </span>
+              Featured Institution
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center gap-4">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-lg shadow-emerald-500/20">
+                  <GraduationCap className="h-8 w-8 text-slate-900" />
+                </div>
+                <div>
+                  <h2 className="text-3xl font-black uppercase tracking-tighter sm:text-4xl">FCCU Admissions 2026</h2>
+                  <p className="text-emerald-400 font-mono text-xs font-bold tracking-widest">FORMAN CHRISTIAN COLLEGE UNIVERSITY</p>
+                </div>
+              </div>
+              <p className="max-w-2xl text-slate-400 text-sm sm:text-base leading-relaxed">
+                Experience a world-class liberal arts education at one of South Asia's most prestigious institutions. 
+                Admissions are now open for Undergraduate, Intermediate, and Postgraduate programs. 
+                Legacy of excellence since 1864.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <a 
+              href="https://www.fccollege.edu.pk/admissions/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-8 py-4 text-sm font-black uppercase tracking-widest text-slate-900 transition-all hover:bg-emerald-400 hover:shadow-xl hover:shadow-emerald-500/20 active:scale-95"
+            >
+              Apply Online <ExternalLink className="h-4 w-4" />
+            </a>
+            <button className="flex items-center justify-center gap-2 rounded-xl bg-white/5 border border-white/10 px-8 py-4 text-sm font-black uppercase tracking-widest text-white backdrop-blur-md transition-all hover:bg-white/10">
+              View Programs
+            </button>
+          </div>
+        </div>
+        
+        {/* Decorative Background Elements */}
+        <div className="absolute -right-20 -top-20 h-96 w-96 rounded-full bg-emerald-500/10 blur-[100px]" />
+        <div className="absolute -bottom-20 -left-20 h-96 w-96 rounded-full bg-blue-500/10 blur-[100px]" />
+        <div className="absolute right-10 bottom-10 opacity-5">
+          <GraduationCap className="h-64 w-64 text-white" />
+        </div>
+      </div>
+
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Admissions Management</h3>
           <p className="text-sm font-medium text-slate-500">Track and manage new student registrations and admissions.</p>
         </div>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-2.5 text-xs font-black uppercase tracking-widest text-white hover:bg-emerald-700"
-        >
-          <UserPlus className="h-4 w-4" /> New Registration
-        </button>
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search admissions..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm focus:border-emerald-500 focus:outline-none"
+            />
+          </div>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <button 
+              onClick={async () => {
+              if (!schoolId) return;
+              const seedData = [
+                { studentName: "Ahmad Ali", parentName: "Ali Ahmad", phone: "03001234567", class: "Class 1", status: "Pending", feeStatus: "Unpaid", date: new Date().toISOString().split('T')[0] },
+                { studentName: "Sara Khan", parentName: "Khan Muhammad", phone: "03007654321", class: "Class 2", status: "Approved", feeStatus: "Paid", date: new Date().toISOString().split('T')[0] },
+                { studentName: "Zainab Bibi", parentName: "Muhammad Zain", phone: "03119876543", class: "Class 1", status: "Pending", feeStatus: "Unpaid", date: new Date().toISOString().split('T')[0] }
+              ];
+              for (const data of seedData) {
+                await addDoc(collection(db, "schools", schoolId, "admissions"), { ...data, createdAt: serverTimestamp() });
+              }
+              alert("Seed data added!");
+            }}
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50"
+          >
+            Seed Data
+          </button>
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-2.5 text-xs font-black uppercase tracking-widest text-white hover:bg-emerald-700"
+          >
+            <UserPlus className="h-4 w-4" /> New Registration
+          </button>
+        </div>
       </div>
+    </div>
 
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+    <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
         {[
           { label: "Total Applications", value: admissions.length, icon: UserPlus, color: "text-blue-600 bg-blue-50" },
           { label: "Pending Review", value: admissions.filter(a => a.status === "Pending").length, icon: Clock, color: "text-amber-600 bg-amber-50" },
@@ -129,10 +221,10 @@ export default function AdmissionsModule({ schoolId }: { schoolId?: string }) {
             <tbody className="divide-y divide-slate-100 text-sm">
               {isLoading ? (
                 <tr><td colSpan={6} className="py-10 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-emerald-500" /></td></tr>
-              ) : admissions.length === 0 ? (
-                <tr><td colSpan={6} className="py-10 text-center text-slate-500">No admission applications found.</td></tr>
+              ) : filteredAdmissions.length === 0 ? (
+                <tr><td colSpan={6} className="py-10 text-center text-slate-500">No matching admission applications found.</td></tr>
               ) : (
-                admissions.map((a) => (
+                filteredAdmissions.map((a) => (
                   <tr key={a.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-6 py-4 font-black text-slate-900 uppercase tracking-tight">{a.studentName}</td>
                     <td className="px-6 py-4">

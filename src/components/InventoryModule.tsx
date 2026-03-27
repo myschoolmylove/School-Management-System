@@ -44,6 +44,9 @@ export default function InventoryModule({ schoolId }: { schoolId?: string }) {
       const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Asset[];
       setAssets(list);
       setIsLoading(false);
+    }, (err) => {
+      console.error("Error fetching inventory:", err);
+      setIsLoading(false);
     });
     return () => unsubscribe();
   }, [schoolId]);

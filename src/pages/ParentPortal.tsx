@@ -26,7 +26,10 @@ import {
   Table as TableIcon,
   FileSpreadsheet,
   School,
-  Users
+  Users,
+  Menu,
+  X,
+  LogOut
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { useAuth } from "../contexts/AuthContext";
@@ -49,42 +52,86 @@ import {
   AreaChart,
   Area
 } from "recharts";
-
-const studentData = {
-  name: "Ali Ahmad",
-  rollNo: "101",
-  class: "Class 10-A",
-  attendance: { present: 85, absent: 5, late: 2 },
-  attendanceHistory: [
-    { date: "2026-03-22", status: "Present" },
-    { date: "2026-03-21", status: "Absent", alertSent: true },
-    { date: "2026-03-20", status: "Present" },
-    { date: "2026-03-19", status: "Late" },
-    { date: "2026-03-18", status: "Present" },
-  ],
-  results: [
-    { subject: "Mathematics", marks: 85, total: 100, grade: "A" },
-    { subject: "English", marks: 78, total: 100, grade: "B+" },
-    { subject: "Physics", marks: 92, total: 100, grade: "A+" },
-    { subject: "Chemistry", marks: 88, total: 100, grade: "A" },
-    { subject: "Computer Science", marks: 95, total: 100, grade: "A+" },
-  ],
-  fees: [
-    { month: "March 2026", amount: 3500, status: "Paid", date: "2026-03-05", voucherId: "V-2026-03-101" },
-    { month: "April 2026", amount: 3500, status: "Unpaid", date: "-", voucherId: "V-2026-04-101" },
-  ],
-  homework: [
-    { id: "1", subject: "Mathematics", title: "Algebraic Expressions", description: "Complete exercises 4.1 to 4.3 from the textbook. Focus on quadratic equations and their applications in real-world scenarios.", dueDate: "2026-03-25", status: "Pending" },
-    { id: "2", subject: "Physics", title: "Newton's Laws", description: "Write a summary of the three laws of motion with examples. Include diagrams for each law to illustrate the forces acting on objects.", dueDate: "2026-03-26", status: "Completed" },
-    { id: "3", subject: "English", title: "Essay Writing", description: "Write a 500-word essay on 'The Impact of Technology on Education'. Ensure proper structure: Introduction, Body, and Conclusion.", dueDate: "2026-03-28", status: "Pending" },
-  ],
-  notices: [
-    { id: "1", title: "Parent-Teacher Meeting", date: "2026-03-30", content: "The monthly PTM is scheduled for next Monday. Please ensure your presence to discuss your child's progress." },
-    { id: "2", title: "Spring Break Holidays", date: "2026-04-05", content: "School will remain closed from April 5th to April 12th for Spring Break." },
-  ]
-};
+import { PDFDownloadLink, Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
+import { auth as firebaseAuth } from "../firebase";
 
 const COLORS = ['#10b981', '#f43f5e', '#f59e0b'];
+
+// PDF Styles
+const styles = StyleSheet.create({
+  page: { padding: 30, backgroundColor: '#ffffff' },
+  header: { marginBottom: 20, borderBottom: 1, borderBottomColor: '#e2e8f0', paddingBottom: 10 },
+  title: { fontSize: 24, fontWeight: 'bold', color: '#0f172a' },
+  subtitle: { fontSize: 14, color: '#64748b', marginTop: 4 },
+  studentInfo: { marginVertical: 20, padding: 15, backgroundColor: '#f8fafc', borderRadius: 8 },
+  infoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },
+  infoLabel: { fontSize: 10, color: '#64748b', textTransform: 'uppercase' },
+  infoValue: { fontSize: 12, fontWeight: 'bold', color: '#0f172a' },
+  table: { marginTop: 20 },
+  tableHeader: { flexDirection: 'row', backgroundColor: '#f1f5f9', padding: 8, borderBottom: 1, borderBottomColor: '#e2e8f0' },
+  tableRow: { flexDirection: 'row', padding: 8, borderBottom: 1, borderBottomColor: '#f1f5f9' },
+  col1: { flex: 2, fontSize: 10 },
+  col2: { flex: 1, fontSize: 10, textAlign: 'center' },
+  col3: { flex: 1, fontSize: 10, textAlign: 'center' },
+  col4: { flex: 1, fontSize: 10, textAlign: 'center' },
+  footer: { marginTop: 40, textAlign: 'center', fontSize: 10, color: '#94a3b8' }
+});
+
+const ResultPDF = ({ student, results, term }: any) => (
+  <Document>
+    <Page size="A4" style={styles.page}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Academic Report Card</Text>
+        <Text style={styles.subtitle}>{term} Examination Results</Text>
+      </View>
+      
+      <View style={styles.studentInfo}>
+        <View style={styles.infoRow}>
+          <View>
+            <Text style={styles.infoLabel}>Student Name</Text>
+            <Text style={styles.infoValue}>{student.name}</Text>
+          </View>
+          <View>
+            <Text style={styles.infoLabel}>Roll Number</Text>
+            <Text style={styles.infoValue}>{student.rollNo}</Text>
+          </View>
+        </View>
+        <View style={styles.infoRow}>
+          <View>
+            <Text style={styles.infoLabel}>Class</Text>
+            <Text style={styles.infoValue}>{student.class} - {student.section}</Text>
+          </View>
+          <View>
+            <Text style={styles.infoLabel}>Date Generated</Text>
+            <Text style={styles.infoValue}>{new Date().toLocaleDateString()}</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.table}>
+        <View style={styles.tableHeader}>
+          <Text style={styles.col1}>Subject</Text>
+          <Text style={styles.col2}>Marks</Text>
+          <Text style={styles.col3}>Total</Text>
+          <Text style={styles.col4}>Grade</Text>
+        </View>
+        {results.map((r: any, i: number) => (
+          <View key={i} style={styles.tableRow}>
+            <Text style={styles.col1}>{r.subject}</Text>
+            <Text style={styles.col2}>{r.marks}</Text>
+            <Text style={styles.col3}>{r.total}</Text>
+            <Text style={styles.col4}>{r.grade}</Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.footer}>
+        <Text>This is a computer-generated document and does not require a signature.</Text>
+      </View>
+    </Page>
+  </Document>
+);
 
 interface AccordionProps {
   title: string;
@@ -197,6 +244,7 @@ const translations = {
 export default function ParentPortal() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("Overview");
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [lang, setLang] = useState<"en" | "ur">("en");
   const { profile, logout, loading: authLoading } = useAuth();
   const t = translations[lang];
@@ -216,8 +264,16 @@ export default function ParentPortal() {
   const [selectedChildIndex, setSelectedChildIndex] = useState(0);
   const [timetableData, setTimetableData] = useState<any[]>([]);
   const [dateSheetData, setDateSheetData] = useState<any[]>([]);
+  const [attendanceData, setAttendanceData] = useState<any[]>([]);
+  const [feeData, setFeeData] = useState<any[]>([]);
+  const [homeworkData, setHomeworkData] = useState<any[]>([]);
+  const [resultData, setResultData] = useState<any[]>([]);
   const [notices, setNotices] = useState<any[]>([]);
+  const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeTerm, setActiveTerm] = useState("Final Term");
+  const [passwordForm, setPasswordForm] = useState({ current: "", new: "" });
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
   const selectedChild = children[selectedChildIndex];
   const currentStudent = selectedChild;
@@ -266,6 +322,30 @@ export default function ParentPortal() {
   }, [profile]);
 
   useEffect(() => {
+    if (!profile?.schoolId || children.length === 0) return;
+
+    const childNames = children.map(c => c.name.toLowerCase());
+    const unsubscribeAudit = onSnapshot(collection(db, "audit_logs"), (snapshot) => {
+      const logs = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter((log: any) => {
+          if (log.schoolId !== profile.schoolId) return false;
+          // Filter logs that mention any of the children's names or roll numbers
+          const details = log.details?.toLowerCase() || "";
+          const action = log.action?.toLowerCase() || "";
+          return childNames.some(name => details.includes(name) || action.includes(name));
+        })
+        .sort((a: any, b: any) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))
+        .slice(0, 5);
+      setRecentActivity(logs);
+    }, (err) => {
+      console.error("Error fetching audit logs:", err);
+    });
+
+    return () => unsubscribeAudit();
+  }, [profile?.schoolId, children]);
+
+  useEffect(() => {
     if (!selectedChild || !profile?.schoolId) return;
 
     // Fetch Timetable for the student's class
@@ -295,6 +375,72 @@ export default function ParentPortal() {
       unsubDateSheet();
     };
   }, [selectedChild, profile?.schoolId]);
+
+  useEffect(() => {
+    if (!selectedChild || !profile?.schoolId) return;
+
+    // Fetch Attendance
+    const qAttendance = query(
+      collection(db, "schools", profile.schoolId, "attendance"),
+      where("studentId", "==", selectedChild.id)
+    );
+    const unsubAttendance = onSnapshot(qAttendance, (snapshot) => {
+      setAttendanceData(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    // Fetch Fees
+    const qFees = query(
+      collection(db, "schools", profile.schoolId, "fees"),
+      where("studentId", "==", selectedChild.id)
+    );
+    const unsubFees = onSnapshot(qFees, (snapshot) => {
+      setFeeData(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    // Fetch Homework
+    const qHomework = query(
+      collection(db, "schools", profile.schoolId, "homework"),
+      where("classId", "==", selectedChild.class)
+    );
+    const unsubHomework = onSnapshot(qHomework, (snapshot) => {
+      setHomeworkData(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    // Fetch Results
+    const qResults = query(
+      collection(db, "schools", profile.schoolId, "results"),
+      where("studentId", "==", selectedChild.id)
+    );
+    const unsubResults = onSnapshot(qResults, (snapshot) => {
+      setResultData(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    return () => {
+      unsubAttendance();
+      unsubFees();
+      unsubHomework();
+      unsubResults();
+    };
+  }, [selectedChild, profile?.schoolId]);
+
+  const handlePasswordUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!firebaseAuth.currentUser || !firebaseAuth.currentUser.email) return;
+    
+    setIsUpdatingPassword(true);
+    try {
+      const credential = EmailAuthProvider.credential(firebaseAuth.currentUser.email, passwordForm.current);
+      await reauthenticateWithCredential(firebaseAuth.currentUser, credential);
+      await updatePassword(firebaseAuth.currentUser, passwordForm.new);
+      alert("Password updated successfully!");
+      setPasswordForm({ current: "", new: "" });
+    } catch (error: any) {
+      console.error("Error updating password:", error);
+      alert(error.message || "Failed to update password. Please check your current password.");
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
 
   const renderContent = () => {
     if (isLoading) {
@@ -326,7 +472,7 @@ export default function ParentPortal() {
     }
 
     // Mock results if not present in DB yet, or use real ones if we had a results collection
-    const results = Array.isArray(currentStudent.results) ? currentStudent.results : [
+    const results = resultData.length > 0 ? resultData.filter(r => r.term === activeTerm) : [
       { subject: "Mathematics", marks: 0, total: 100, grade: "N/A" },
       { subject: "English", marks: 0, total: 100, grade: "N/A" },
     ];
@@ -335,6 +481,13 @@ export default function ParentPortal() {
       subject: (r.subject || "Unknown").split(' ')[0],
       marks: r.marks || 0
     }));
+
+    const attendanceStats = {
+      present: attendanceData.filter(a => a.status === "Present").length,
+      absent: attendanceData.filter(a => a.status === "Absent").length,
+      late: attendanceData.filter(a => a.status === "Late").length,
+      total: attendanceData.length
+    };
 
     switch (activeTab) {
       case "Overview":
@@ -442,27 +595,26 @@ export default function ParentPortal() {
               <div className="rounded-2xl border border-black/5 bg-white p-8 shadow-sm">
                 <h3 className="text-lg font-bold text-slate-900">Recent Activity</h3>
                 <div className="mt-6 space-y-6">
-                  {[
-                    { title: "Result Published", desc: "Latest results are now available", icon: FileText, color: "purple", time: "Recently" },
-                    { title: "Timetable Updated", desc: "New class schedule is active", icon: TableIcon, color: "blue", time: "Recently" }
-                  ].map((activity, i) => (
-                    <div key={i} className="flex gap-4">
-                      <div className={cn(
-                        "flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
-                        activity.color === "emerald" ? "bg-emerald-50 text-emerald-600" :
-                        activity.color === "blue" ? "bg-blue-50 text-blue-600" : "bg-purple-50 text-purple-600"
-                      )}>
-                        <activity.icon className="h-5 w-5" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm font-bold text-slate-900">{activity.title}</p>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase">{activity.time}</span>
+                  {recentActivity.length === 0 ? (
+                    <p className="text-center py-8 text-slate-400 text-sm">No recent activity found.</p>
+                  ) : (
+                    recentActivity.map((activity) => (
+                      <div key={activity.id} className="flex gap-4">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-50 text-slate-600">
+                          <History className="h-5 w-5" />
                         </div>
-                        <p className="text-xs text-slate-500">{activity.desc}</p>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-bold text-slate-900">{activity.action}</p>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase">
+                              {activity.timestamp?.toDate ? activity.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recently'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500">{activity.details}</p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
             </div>
@@ -494,21 +646,30 @@ export default function ParentPortal() {
                   {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(day => (
                     <div key={day} className="text-center text-[10px] font-black uppercase tracking-widest text-slate-400 pb-2">{day}</div>
                   ))}
-                  {Array.from({ length: 31 }).map((_, i) => (
-                    <motion.div 
-                      key={i} 
-                      whileHover={{ scale: 1.05 }}
-                      className={cn(
-                        "flex h-14 flex-col items-center justify-center rounded-xl text-sm font-bold transition-all border border-transparent",
-                        i % 7 === 6 ? "bg-slate-50 text-slate-300" : 
-                        i % 10 === 0 ? "bg-rose-50 text-rose-600 border-rose-100" : 
-                        "bg-emerald-50 text-emerald-600 border-emerald-100"
-                      )}
-                    >
-                      <span>{i + 1}</span>
-                      <span className="text-[8px] opacity-60">{i % 7 === 6 ? "OFF" : i % 10 === 0 ? "ABS" : "PRE"}</span>
-                    </motion.div>
-                  ))}
+                  {Array.from({ length: 31 }).map((_, i) => {
+                    const day = i + 1;
+                    const dateStr = `2026-03-${day.toString().padStart(2, '0')}`;
+                    const record = attendanceData.find(a => a.date === dateStr);
+                    
+                    return (
+                      <motion.div 
+                        key={i} 
+                        whileHover={{ scale: 1.05 }}
+                        className={cn(
+                          "flex h-14 flex-col items-center justify-center rounded-xl text-sm font-bold transition-all border border-transparent",
+                          !record ? "bg-slate-50 text-slate-300" : 
+                          record.status === "Absent" ? "bg-rose-50 text-rose-600 border-rose-100" : 
+                          record.status === "Late" ? "bg-amber-50 text-amber-600 border-amber-100" :
+                          "bg-emerald-50 text-emerald-600 border-emerald-100"
+                        )}
+                      >
+                        <span>{day}</span>
+                        <span className="text-[8px] opacity-60">
+                          {!record ? "N/A" : record.status.substring(0, 3).toUpperCase()}
+                        </span>
+                      </motion.div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -517,10 +678,10 @@ export default function ParentPortal() {
                   <h3 className="text-lg font-bold text-slate-900">Monthly Stats</h3>
                   <div className="mt-6 space-y-4">
                     {[
-                      { label: "Working Days", value: "24", color: "slate" },
-                      { label: "Present", value: "22", color: "emerald" },
-                      { label: "Absent", value: "1", color: "rose" },
-                      { label: "Late", value: "1", color: "amber" }
+                      { label: "Total Records", value: attendanceStats.total, color: "slate" },
+                      { label: "Present", value: attendanceStats.present, color: "emerald" },
+                      { label: "Absent", value: attendanceStats.absent, color: "rose" },
+                      { label: "Late", value: attendanceStats.late, color: "amber" }
                     ].map((stat, i) => (
                       <div key={i} className="flex items-center justify-between">
                         <span className="text-sm font-medium text-slate-500">{stat.label}</span>
@@ -536,9 +697,11 @@ export default function ParentPortal() {
                   <div className="mt-8 pt-6 border-t border-slate-50">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Attendance Rate</p>
                     <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
-                      <div className="h-full bg-emerald-500 rounded-full" style={{ width: '92%' }} />
+                      <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${attendanceStats.total > 0 ? (attendanceStats.present / attendanceStats.total) * 100 : 0}%` }} />
                     </div>
-                    <p className="mt-2 text-right text-sm font-black text-emerald-600">92%</p>
+                    <p className="mt-2 text-right text-sm font-black text-emerald-600">
+                      {attendanceStats.total > 0 ? Math.round((attendanceStats.present / attendanceStats.total) * 100) : 0}%
+                    </p>
                   </div>
                 </div>
               </div>
@@ -555,12 +718,11 @@ export default function ParentPortal() {
                       <th className="px-6 py-4">Date</th>
                       <th className="px-6 py-4">Status</th>
                       <th className="px-6 py-4">Check-in</th>
-                      <th className="px-6 py-4">{t.alertStatus}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 text-sm">
-                    {studentData.attendanceHistory.map((record) => (
-                      <tr key={record.date} className="hover:bg-slate-50/50 transition-colors">
+                    {attendanceData.sort((a, b) => b.date.localeCompare(a.date)).map((record) => (
+                      <tr key={record.id} className="hover:bg-slate-50/50 transition-colors">
                         <td className="px-6 py-4 font-bold text-slate-900">{record.date}</td>
                         <td className="px-6 py-4">
                           <span className={cn(
@@ -574,17 +736,16 @@ export default function ParentPortal() {
                             {record.status}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-slate-500 font-medium">{record.status === "Present" ? "07:45 AM" : "-"}</td>
-                        <td className="px-6 py-4">
-                          {record.alertSent && (
-                            <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-emerald-600 bg-emerald-50/50 px-2 py-1 rounded-lg w-fit">
-                              <MessageCircle className="h-3 w-3" />
-                              {t.whatsappAlert}
-                            </span>
-                          )}
-                        </td>
+                        <td className="px-6 py-4 text-slate-500 font-medium">{record.checkIn || "-"}</td>
                       </tr>
                     ))}
+                    {attendanceData.length === 0 && (
+                      <tr>
+                        <td colSpan={3} className="px-6 py-12 text-center text-slate-400 font-medium">
+                          No attendance records found.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -601,27 +762,21 @@ export default function ParentPortal() {
             <div className="flex items-center justify-between bg-white p-6 rounded-2xl border border-black/5 shadow-sm">
               <h3 className="text-lg font-bold text-slate-900">Assigned Homework</h3>
               <div className="flex gap-2">
-                <span className="rounded-lg bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-600">3 Tasks Total</span>
+                <span className="rounded-lg bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-600">{homeworkData.length} Tasks Total</span>
               </div>
             </div>
 
             <div className="grid gap-6">
-              {studentData.homework.map((task) => (
+              {homeworkData.map((task) => (
                 <Accordion 
                   key={task.id} 
                   title={task.title} 
                   icon={BookOpen}
-                  defaultOpen={task.id === "1"}
+                  defaultOpen={false}
                 >
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-black uppercase tracking-widest text-blue-600">{task.subject}</span>
-                      <span className={cn(
-                        "rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest",
-                        task.status === "Completed" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
-                      )}>
-                        {task.status}
-                      </span>
                     </div>
                     <p className="text-slate-600 leading-relaxed">{task.description}</p>
                     <div className="flex items-center justify-between pt-4 border-t border-slate-100">
@@ -629,13 +784,15 @@ export default function ParentPortal() {
                         <Calendar className="h-4 w-4" />
                         {t.dueDate}: {task.dueDate}
                       </div>
-                      <button className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800 transition-all">
-                        Mark as Done
-                      </button>
                     </div>
                   </div>
                 </Accordion>
               ))}
+              {homeworkData.length === 0 && (
+                <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-slate-200 text-slate-400">
+                  No homework assigned for this class.
+                </div>
+              )}
             </div>
           </motion.div>
         );
@@ -649,11 +806,30 @@ export default function ParentPortal() {
             <div className="grid gap-6 lg:grid-cols-3">
               <div className="lg:col-span-2 rounded-2xl border border-black/5 bg-white p-8 shadow-sm">
                 <div className="mb-8 flex items-center justify-between">
-                  <h3 className="text-xl font-bold text-slate-900">Marks Distribution</h3>
-                  <button className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 transition-all">
-                    <Download className="h-4 w-4" />
-                    Export PDF
-                  </button>
+                  <div className="flex items-center gap-4">
+                    <h3 className="text-xl font-bold text-slate-900">Marks Distribution</h3>
+                    <select 
+                      value={activeTerm}
+                      onChange={(e) => setActiveTerm(e.target.value)}
+                      className="rounded-lg border-none bg-slate-50 px-3 py-1 text-xs font-bold text-slate-600 focus:ring-2 focus:ring-emerald-500/20"
+                    >
+                      <option value="First Term">First Term</option>
+                      <option value="Mid Term">Mid Term</option>
+                      <option value="Final Term">Final Term</option>
+                    </select>
+                  </div>
+                  <PDFDownloadLink 
+                    document={<ResultPDF student={selectedChild} results={results} term={activeTerm} />} 
+                    fileName={`${selectedChild.name}_${activeTerm}_Results.pdf`}
+                    className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 transition-all"
+                  >
+                    {({ loading }) => (
+                      <>
+                        <Download className="h-4 w-4" />
+                        {loading ? 'Preparing...' : 'Export PDF'}
+                      </>
+                    )}
+                  </PDFDownloadLink>
                 </div>
                 <div className="h-[350px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
@@ -675,14 +851,17 @@ export default function ParentPortal() {
                 <h3 className="text-lg font-bold text-slate-900">Grade Summary</h3>
                 <div className="mt-8 flex flex-col items-center">
                   <div className="relative flex h-32 w-32 items-center justify-center rounded-full border-8 border-emerald-500 shadow-lg shadow-emerald-100">
-                    <span className="text-4xl font-black text-slate-900">{currentStudent.grade || "A"}</span>
-                    <div className="absolute -bottom-2 rounded-full bg-emerald-600 px-3 py-1 text-[10px] font-black text-white uppercase tracking-widest">Excellent</div>
+                    <span className="text-4xl font-black text-slate-900">
+                      {results.length > 0 ? (results.reduce((acc: number, curr: any) => acc + curr.marks, 0) / results.reduce((acc: number, curr: any) => acc + curr.total, 0) * 100 > 80 ? "A" : "B") : "N/A"}
+                    </span>
+                    <div className="absolute -bottom-2 rounded-full bg-emerald-600 px-3 py-1 text-[10px] font-black text-white uppercase tracking-widest">
+                      {results.length > 0 ? "Good" : "No Data"}
+                    </div>
                   </div>
                   <div className="mt-12 w-full space-y-4">
                     {[
-                      { label: "Percentage", value: currentStudent.percentage || "88.2%" },
-                      { label: "Class Rank", value: currentStudent.rank || "4th" },
-                      { label: "GPA", value: currentStudent.gpa || "3.8" }
+                      { label: "Percentage", value: results.length > 0 ? `${Math.round(results.reduce((acc: number, curr: any) => acc + curr.marks, 0) / results.reduce((acc: number, curr: any) => acc + curr.total, 0) * 100)}%` : "0%" },
+                      { label: "Total Marks", value: `${results.reduce((acc: number, curr: any) => acc + curr.marks, 0)} / ${results.reduce((acc: number, curr: any) => acc + curr.total, 0)}` }
                     ].map((stat, i) => (
                       <div key={i} className="flex items-center justify-between border-b border-slate-50 pb-2">
                         <span className="text-sm font-medium text-slate-500">{stat.label}</span>
@@ -707,8 +886,8 @@ export default function ParentPortal() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 text-sm">
-                    {results.map((result: any) => (
-                      <tr key={result.subject} className="hover:bg-slate-50/50 transition-colors">
+                    {results.map((result: any, i: number) => (
+                      <tr key={i} className="hover:bg-slate-50/50 transition-colors">
                         <td className="px-6 py-4 font-bold text-slate-900">{result.subject}</td>
                         <td className="px-6 py-4 font-black text-emerald-600">{result.marks}</td>
                         <td className="px-6 py-4 text-slate-400 font-bold">{result.total}</td>
@@ -720,9 +899,16 @@ export default function ParentPortal() {
                             {result.grade}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-slate-500 italic">Good performance</td>
+                        <td className="px-6 py-4 text-slate-500 italic">{result.remarks || "Good performance"}</td>
                       </tr>
                     ))}
+                    {results.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="px-6 py-12 text-center text-slate-400 font-medium">
+                          No results found for {activeTerm}.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -844,7 +1030,9 @@ export default function ParentPortal() {
                   <div className="p-6 border-b border-slate-50 flex justify-between items-center bg-slate-50/30">
                     <h3 className="text-lg font-bold text-slate-900">Fee History</h3>
                     <div className="flex gap-2">
-                      <span className="rounded-lg bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-600">No Arrears</span>
+                      <span className="rounded-lg bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-600">
+                        {feeData.some(f => f.status === "Unpaid") ? "Arrears Pending" : "No Arrears"}
+                      </span>
                     </div>
                   </div>
                   <div className="overflow-x-auto">
@@ -859,8 +1047,8 @@ export default function ParentPortal() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50 text-sm">
-                        {studentData.fees.map((fee) => (
-                          <tr key={fee.month} className="hover:bg-slate-50/50 transition-colors">
+                        {feeData.map((fee) => (
+                          <tr key={fee.id} className="hover:bg-slate-50/50 transition-colors">
                             <td className="px-6 py-4 font-bold text-slate-900">{fee.month}</td>
                             <td className="px-6 py-4 font-black text-slate-900">Rs. {fee.amount}</td>
                             <td className="px-6 py-4">
@@ -871,7 +1059,7 @@ export default function ParentPortal() {
                                 {fee.status}
                               </span>
                             </td>
-                            <td className="px-6 py-4 text-slate-500 font-medium">{fee.date}</td>
+                            <td className="px-6 py-4 text-slate-500 font-medium">{fee.date || "-"}</td>
                             <td className="px-6 py-4 text-right">
                               <button className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-600 hover:text-emerald-700 transition-colors">
                                 <Printer className="h-3.5 w-3.5" />
@@ -880,6 +1068,13 @@ export default function ParentPortal() {
                             </td>
                           </tr>
                         ))}
+                        {feeData.length === 0 && (
+                          <tr>
+                            <td colSpan={5} className="px-6 py-12 text-center text-slate-400 font-medium">
+                              No fee records found.
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -893,8 +1088,12 @@ export default function ParentPortal() {
                   <div className="mt-8 space-y-4">
                     <div className="rounded-xl bg-white/5 p-4 border border-white/10">
                       <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Next Due Amount</p>
-                      <h4 className="mt-1 text-2xl font-black">Rs. 3,500</h4>
-                      <p className="mt-1 text-[10px] font-bold text-rose-400 uppercase tracking-widest">Due by April 10, 2026</p>
+                      <h4 className="mt-1 text-2xl font-black">
+                        Rs. {feeData.filter(f => f.status === "Unpaid").reduce((acc, curr) => acc + curr.amount, 0).toLocaleString()}
+                      </h4>
+                      <p className="mt-1 text-[10px] font-bold text-rose-400 uppercase tracking-widest">
+                        {feeData.some(f => f.status === "Unpaid") ? "Action Required" : "All Clear"}
+                      </p>
                     </div>
                     <button className="w-full rounded-xl bg-emerald-500 py-3 text-sm font-black uppercase tracking-widest text-white transition-all hover:bg-emerald-400 shadow-lg shadow-emerald-500/20">
                       Pay Now
@@ -934,17 +1133,33 @@ export default function ParentPortal() {
                   <p className="text-sm text-slate-500">Update your account password for security</p>
                 </div>
               </div>
-              <form className="space-y-4">
+              <form onSubmit={handlePasswordUpdate} className="space-y-4">
                 <div>
                   <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-2">{t.currentPassword}</label>
-                  <input type="password" placeholder="••••••••" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all" />
+                  <input 
+                    type="password" 
+                    required
+                    value={passwordForm.current}
+                    onChange={(e) => setPasswordForm({ ...passwordForm, current: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all" 
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-2">{t.newPassword}</label>
-                  <input type="password" placeholder="••••••••" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all" />
+                  <input 
+                    type="password" 
+                    required
+                    value={passwordForm.new}
+                    onChange={(e) => setPasswordForm({ ...passwordForm, new: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all" 
+                  />
                 </div>
-                <button type="submit" className="w-full rounded-xl bg-emerald-600 px-4 py-4 text-sm font-black uppercase tracking-widest text-white transition-all hover:bg-emerald-700 shadow-lg shadow-emerald-600/20">
-                  {t.updatePassword}
+                <button 
+                  type="submit" 
+                  disabled={isUpdatingPassword}
+                  className="w-full rounded-xl bg-emerald-600 px-4 py-4 text-sm font-black uppercase tracking-widest text-white transition-all hover:bg-emerald-700 shadow-lg shadow-emerald-600/20 disabled:opacity-50"
+                >
+                  {isUpdatingPassword ? "Updating..." : t.updatePassword}
                 </button>
               </form>
             </div>
@@ -992,10 +1207,78 @@ export default function ParentPortal() {
       "flex min-h-screen bg-slate-50",
       lang === "ur" ? "flex-row-reverse text-right" : "flex-row"
     )} dir={lang === "ur" ? "rtl" : "ltr"}>
-      {/* Sidebar */}
+      {/* Mobile Sidebar Drawer */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
+            />
+            <motion.aside
+              initial={{ x: lang === "ur" ? "100%" : "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: lang === "ur" ? "100%" : "-100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className={cn(
+                "fixed inset-y-0 z-50 flex w-72 flex-col bg-slate-900 text-white shadow-2xl lg:hidden",
+                lang === "ur" ? "right-0" : "left-0"
+              )}
+            >
+              <div className="flex h-24 items-center justify-between px-8 border-b border-white/5">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500 shadow-lg shadow-emerald-500/20">
+                    <School className="h-6 w-6 text-white" />
+                  </div>
+                  <span className="text-xl font-black uppercase tracking-widest">Parent Portal</span>
+                </div>
+                <button 
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="rounded-lg p-2 text-slate-400 hover:bg-white/5 hover:text-white"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              <nav className="mt-8 overflow-y-auto space-y-2 px-4">
+                {sidebarItems.map((item) => (
+                  <button
+                    key={item.name}
+                    onClick={() => {
+                      setActiveTab(item.name);
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={cn(
+                      "flex w-full items-center gap-3 rounded-xl px-4 py-3.5 text-sm font-bold transition-all",
+                      activeTab === item.name 
+                        ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/20" 
+                        : "text-slate-400 hover:bg-white/5 hover:text-white"
+                    )}
+                  >
+                    <item.icon className="h-5 w-5" />
+                    {item.label}
+                  </button>
+                ))}
+                <button 
+                  onClick={logout}
+                  className="flex w-full items-center gap-3 rounded-xl px-4 py-3.5 text-sm font-bold text-rose-400 hover:bg-rose-500/10 transition-all mt-8"
+                >
+                  <Lock className="h-5 w-5" />
+                  {lang === "ur" ? "لاگ آؤٹ" : "Logout"}
+                </button>
+              </nav>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Sidebar (Desktop) */}
       <aside className={cn(
-        "fixed inset-y-0 z-50 w-72 bg-slate-900 text-white transition-all lg:static",
-        lang === "ur" ? "right-0" : "left-0"
+        "hidden w-72 flex-col bg-slate-900 text-white lg:flex",
+        lang === "ur" ? "border-l border-white/5" : "border-r border-white/5"
       )}>
         <div className="flex h-24 items-center gap-3 px-8 border-b border-white/5">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500 shadow-lg shadow-emerald-500/20">
@@ -1034,13 +1317,21 @@ export default function ParentPortal() {
       <main className="flex-1 overflow-y-auto p-4 lg:p-8">
         {/* Header */}
         <header className="mb-8 flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tight">
-              {t.welcome} {profile?.name}
-            </h2>
-            <p className="text-sm font-medium text-slate-500">
-              {lang === "ur" ? "اپنے بچے کی تعلیمی پیشرفت پر نظر رکھیں" : "Keep track of your child's academic progress and school activities."}
-            </p>
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden"
+            >
+              <Menu className="h-6 w-6" />
+            </button>
+            <div>
+              <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tight">
+                {t.welcome} {profile?.name}
+              </h2>
+              <p className="text-sm font-medium text-slate-500">
+                {lang === "ur" ? "اپنے بچے کی تعلیمی پیشرفت پر نظر رکھیں" : "Keep track of your child's academic progress and school activities."}
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-4">
             {/* Language Toggle */}

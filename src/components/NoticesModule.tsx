@@ -58,6 +58,9 @@ export default function NoticesModule({ schoolId }: { schoolId?: string }) {
       const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Notice[];
       setNotices(list);
       setIsLoading(false);
+    }, (err) => {
+      console.error("Error fetching notices:", err);
+      setIsLoading(false);
     });
     return () => unsubscribe();
   }, [schoolId]);

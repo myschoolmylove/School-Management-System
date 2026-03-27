@@ -38,6 +38,9 @@ export default function EventsModule({ schoolId }: { schoolId?: string }) {
       const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as SchoolEvent[];
       setEvents(list);
       setIsLoading(false);
+    }, (err) => {
+      console.error("Error fetching events:", err);
+      setIsLoading(false);
     });
     return () => unsubscribe();
   }, [schoolId]);

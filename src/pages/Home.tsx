@@ -101,7 +101,7 @@ export default function Home() {
               Trending
             </span>
             <div className="flex gap-3 overflow-x-auto no-scrollbar">
-              {["Matric", "Inter", "MDCAT", "NTS", "Scholarships", "Admissions"].map((tag) => (
+              {["Matric", "Inter", "Scholarships", "Admissions"].map((tag) => (
                 <button 
                   key={tag}
                   className="whitespace-nowrap rounded-full border border-slate-100 bg-white px-5 py-2 text-xs font-bold text-slate-600 transition-all hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 hover:shadow-sm"

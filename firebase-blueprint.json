@@ -89,6 +89,132 @@
         "date": { "type": "string", "format": "date" }
       },
       "required": ["id", "schoolId", "imageUrl"]
+    },
+    "PublicAdmission": {
+      "title": "Public Admission Notice",
+      "description": "Represents a public admission notice shown on the admissions page.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "type": { "type": "string", "enum": ["School", "College", "University"] },
+        "location": { "type": "string" },
+        "desc": { "type": "string" },
+        "deadline": { "type": "string", "format": "date" }
+      },
+      "required": ["title", "deadline", "type", "location"]
+    },
+    "PublicApplication": {
+      "title": "Public Admission Application",
+      "description": "Represents an application submitted through the public admissions page.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "admissionId": { "type": "string" },
+        "admissionTitle": { "type": "string" },
+        "studentName": { "type": "string" },
+        "parentName": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "class": { "type": "string" },
+        "message": { "type": "string" },
+        "status": { "type": "string", "enum": ["Received", "Contacted", "Closed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["studentName", "phone", "email"]
+    },
+    "PublicResult": {
+      "title": "Public Board Result",
+      "description": "Represents a board result searchable by roll number.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "rollNo": { "type": "string" },
+        "studentName": { "type": "string" },
+        "fatherName": { "type": "string" },
+        "board": { "type": "string" },
+        "marks": { "type": "number" },
+        "totalMarks": { "type": "number" },
+        "grade": { "type": "string" },
+        "year": { "type": "string" },
+        "session": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pass", "Fail"] }
+      },
+      "required": ["rollNo", "studentName", "marks", "totalMarks", "board", "year", "session"]
+    },
+    "Attendance": {
+      "title": "Attendance",
+      "description": "Represents a student's daily attendance record.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["Present", "Absent", "Late", "Leave"] },
+        "checkIn": { "type": "string" }
+      },
+      "required": ["studentId", "date", "status"]
+    },
+    "Fee": {
+      "title": "Fee",
+      "description": "Represents a student's fee record.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "month": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["Paid", "Unpaid", "Pending"] },
+        "date": { "type": "string", "format": "date" },
+        "voucherId": { "type": "string" }
+      },
+      "required": ["studentId", "month", "amount", "status"]
+    },
+    "Result": {
+      "title": "Internal Result",
+      "description": "Represents a student's internal school result.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "term": { "type": "string" },
+        "subject": { "type": "string" },
+        "marks": { "type": "number" },
+        "total": { "type": "number" },
+        "grade": { "type": "string" },
+        "remarks": { "type": "string" }
+      },
+      "required": ["studentId", "term", "subject", "marks", "total"]
+    },
+    "Timetable": {
+      "title": "Timetable",
+      "description": "Represents a class timetable entry.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "classId": { "type": "string" },
+        "day": { "type": "string" },
+        "subject": { "type": "string" },
+        "teacher": { "type": "string" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" }
+      },
+      "required": ["classId", "day", "subject", "startTime", "endTime"]
+    },
+    "DateSheet": {
+      "title": "Date Sheet",
+      "description": "Represents an examination schedule entry.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "classId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "subject": { "type": "string" },
+        "time": { "type": "string" },
+        "venue": { "type": "string" }
+      },
+      "required": ["classId", "date", "subject", "time"]
     }
   },
   "firestore": {
@@ -97,6 +223,14 @@
     "/schools/{schoolId}/students/{studentId}": { "schema": "Student", "description": "Students in a school" },
     "/schools/{schoolId}/homework/{homeworkId}": { "schema": "Homework", "description": "Homework tasks" },
     "/schools/{schoolId}/events/{eventId}": { "schema": "Event", "description": "School events" },
-    "/schools/{schoolId}/gallery/{galleryId}": { "schema": "GalleryItem", "description": "School gallery items" }
+    "/schools/{schoolId}/gallery/{galleryId}": { "schema": "GalleryItem", "description": "School gallery items" },
+    "/schools/{schoolId}/attendance/{attendanceId}": { "schema": "Attendance", "description": "Attendance records" },
+    "/schools/{schoolId}/fees/{feeId}": { "schema": "Fee", "description": "Fee records" },
+    "/schools/{schoolId}/results/{resultId}": { "schema": "Result", "description": "Internal results" },
+    "/schools/{schoolId}/timetables/{timetableId}": { "schema": "Timetable", "description": "Class timetables" },
+    "/schools/{schoolId}/datesheets/{datesheetId}": { "schema": "DateSheet", "description": "Exam date sheets" },
+    "/public_admissions/{admissionId}": { "schema": "PublicAdmission", "description": "Public admission notices" },
+    "/public_applications/{applicationId}": { "schema": "PublicApplication", "description": "Applications from public admissions page" },
+    "/public_results/{resultId}": { "schema": "PublicResult", "description": "Public board results" }
   }
 }
