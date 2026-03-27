@@ -247,7 +247,12 @@ export default function ParentPortal() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [lang, setLang] = useState<"en" | "ur">("en");
   const { profile, logout, loading: authLoading } = useAuth();
-  const t = translations[lang];
+  const baseT = translations[lang];
+  const t = {
+    ...baseT,
+    selectChild: profile?.role === 'student' ? (lang === 'en' ? 'My Profile' : 'میرا پروفائل') : baseT.selectChild,
+    keepTrack: profile?.role === 'student' ? (lang === 'en' ? 'Keep track of your academic progress and school activities.' : 'اپنی تعلیمی پیشرفت اور اسکول کی سرگرمیوں پر نظر رکھیں') : baseT.keepTrack,
+  };
 
   const sidebarItems = [
     { name: "Overview", label: t.dashboard, icon: LayoutDashboard },
@@ -284,16 +289,26 @@ export default function ParentPortal() {
       navigate("/login");
       return;
     }
-    if (!profile?.schoolId || profile.role !== 'parent' || !profile.uid) {
+    if (!profile?.schoolId || (profile.role !== 'parent' && profile.role !== 'student') || !profile.uid) {
       setIsLoading(false);
       return;
     }
 
-    // Fetch children linked to this parent
-    const qChildren = query(
-      collection(db, "schools", profile.schoolId, "students"),
-      where("parentUid", "==", profile.uid)
-    );
+    // Fetch children linked to this parent or the student themselves
+    let qChildren;
+    if (profile.role === 'parent') {
+      qChildren = query(
+        collection(db, "schools", profile.schoolId, "students"),
+        where("parentUid", "==", profile.uid)
+      );
+    } else {
+      // For student role, fetch the student document associated with this user
+      // We assume the student document has a field 'uid' or we match by rollNo/username
+      qChildren = query(
+        collection(db, "schools", profile.schoolId, "students"),
+        where("rollNo", "==", profile.username || profile.email.split('@')[0])
+      );
+    }
 
     const unsubChildren = onSnapshot(qChildren, (snapshot) => {
       const childList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));

@@ -34,7 +34,27 @@ service cloud.firestore {
     function isSchoolAdmin(schoolId) {
       return isAuthenticated() &&
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'school' &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'school' ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.schoolId == schoolId;
+    }
+
+    function isFinanceAdmin(schoolId) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'school' ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'finance' ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'accountant') &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.schoolId == schoolId;
+    }
+
+    function isRegistrar(schoolId) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'school' ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'registrar') &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.schoolId == schoolId;
     }
 
@@ -49,6 +69,13 @@ service cloud.firestore {
       return isAuthenticated() &&
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'parent' &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.schoolId == schoolId;
+    }
+
+    function isStudent(schoolId) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'student' &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.schoolId == schoolId;
     }
 
@@ -85,9 +112,31 @@ service cloud.firestore {
       allow read: if isOwner(userId) || isSuperAdmin() || 
                    (isAuthenticated() && 
                     exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                    get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'school' && 
+                    (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'school' ||
+                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') && 
                     resource.data.schoolId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.schoolId);
-      allow write: if isOwner(userId) || isSuperAdmin();
+      allow create: if isSuperAdmin() || 
+                     (isAuthenticated() && 
+                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                      (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'school' ||
+                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') && 
+                      request.resource.data.schoolId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.schoolId &&
+                      request.resource.data.role != 'super');
+      allow update: if isOwner(userId) || isSuperAdmin() ||
+                             (isAuthenticated() && 
+                              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                              (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'school' ||
+                               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') && 
+                              resource.data.schoolId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.schoolId &&
+                              request.resource.data.schoolId == resource.data.schoolId &&
+                              request.resource.data.role != 'super');
+      allow delete: if isOwner(userId) || isSuperAdmin() ||
+                             (isAuthenticated() && 
+                              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                              (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'school' ||
+                               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') && 
+                              resource.data.schoolId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.schoolId &&
+                              resource.data.role != 'super');
     }
 
     // Schools collection
@@ -97,14 +146,15 @@ service cloud.firestore {
 
       // Students subcollection
       match /students/{studentId} {
-        allow read: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId) || isTeacher(schoolId) || 
-                     (isParent(schoolId) && request.auth.uid == resource.data.parentUid));
-        allow write: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId));
+        allow read: if isSchoolActive(schoolId) && (isSuperAdmin() || isRegistrar(schoolId) || isTeacher(schoolId) || 
+                     (isParent(schoolId) && request.auth.uid == resource.data.parentUid) ||
+                     (isStudent(schoolId) && resource.data.rollNo == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.username));
+        allow write: if isSchoolActive(schoolId) && (isSuperAdmin() || isRegistrar(schoolId));
       }
 
       // Homework subcollection
       match /homework/{homeworkId} {
-        allow read: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId) || isTeacher(schoolId) || isParent(schoolId));
+        allow read: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId) || isTeacher(schoolId) || isParent(schoolId) || isStudent(schoolId));
         allow write: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId) || isTeacher(schoolId));
       }
 
@@ -135,22 +185,25 @@ service cloud.firestore {
       // Results subcollection
       match /results/{resultId} {
         allow read: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId) || isTeacher(schoolId) || 
-                     (isParent(schoolId) && request.auth.uid == resource.data.parentUid));
+                     (isParent(schoolId) && request.auth.uid == resource.data.parentUid) ||
+                     (isStudent(schoolId) && resource.data.rollNo == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.username));
         allow write: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId) || isTeacher(schoolId));
       }
 
       // Attendance subcollection
       match /attendance/{attendanceId} {
         allow read: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId) || isTeacher(schoolId) || 
-                     (isParent(schoolId) && request.auth.uid == resource.data.parentUid));
+                     (isParent(schoolId) && request.auth.uid == resource.data.parentUid) ||
+                     (isStudent(schoolId) && resource.data.rollNo == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.username));
         allow write: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId) || isTeacher(schoolId));
       }
 
       // Vouchers subcollection
       match /vouchers/{voucherId} {
-        allow read: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId) || 
-                     (isParent(schoolId) && request.auth.uid == resource.data.parentUid));
-        allow write: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId));
+        allow read: if isSchoolActive(schoolId) && (isSuperAdmin() || isFinanceAdmin(schoolId) || 
+                     (isParent(schoolId) && request.auth.uid == resource.data.parentUid) ||
+                     (isStudent(schoolId) && resource.data.rollNo == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.username));
+        allow write: if isSchoolActive(schoolId) && (isSuperAdmin() || isFinanceAdmin(schoolId));
       }
 
       // Teachers subcollection
@@ -167,14 +220,14 @@ service cloud.firestore {
 
       // Finance subcollection
       match /finance/{transactionId} {
-        allow read: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId));
-        allow write: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId));
+        allow read: if isSchoolActive(schoolId) && (isSuperAdmin() || isFinanceAdmin(schoolId));
+        allow write: if isSchoolActive(schoolId) && (isSuperAdmin() || isFinanceAdmin(schoolId));
       }
 
       // Admissions subcollection
       match /admissions/{admissionId} {
-        allow read: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId));
-        allow write: if isSchoolActive(schoolId) && (isSuperAdmin() || isSchoolAdmin(schoolId));
+        allow read: if isSchoolActive(schoolId) && (isSuperAdmin() || isRegistrar(schoolId));
+        allow write: if isSchoolActive(schoolId) && (isSuperAdmin() || isRegistrar(schoolId));
       }
 
       // Notices subcollection

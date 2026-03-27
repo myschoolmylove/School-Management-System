@@ -10,7 +10,7 @@ import { UserProfile } from "../types";
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"school" | "super" | "parent" | "teacher" | "finance">("school");
+  const [role, setRole] = useState<"school" | "super" | "parent" | "teacher" | "finance" | "admin" | "registrar" | "librarian" | "accountant" | "clerk" | "driver" | "security" | "warden" | "coordinator" | "receptionist" | "student">("school");
   const [selectedSchool, setSelectedSchool] = useState("");
   const [schools, setSchools] = useState<{ id: string; name: string }[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -61,9 +61,24 @@ export default function Login() {
 
         switch (profile.role) {
           case "super": navigate("/super-admin"); break;
-          case "parent": navigate("/parent-portal"); break;
+          case "parent": 
+          case "student":
+            navigate("/parent-portal"); 
+            break;
           case "teacher": navigate("/teacher-dashboard"); break; 
-          case "school": navigate("/admin"); break;
+          case "school": 
+          case "admin":
+          case "registrar":
+          case "librarian":
+          case "accountant":
+          case "clerk":
+          case "driver":
+          case "security":
+          case "warden":
+          case "coordinator":
+          case "receptionist":
+            navigate("/admin"); 
+            break;
           case "finance": navigate("/finance-dashboard"); break;
           default: navigate("/");
         }
@@ -101,7 +116,7 @@ export default function Login() {
     setError("");
     setSuccess("");
     
-    if ((role === "teacher" || role === "parent") && !selectedSchool) {
+    if ((role === "teacher" || role === "parent" || role === "student") && !selectedSchool) {
       setError("Please select your school");
       setIsLoading(false);
       return;
@@ -125,8 +140,8 @@ export default function Login() {
 
       let loginEmail = email.trim();
       
-      // Handle Parent/Teacher usernames (Name or Mobile Number)
-      if ((role === "parent" || role === "teacher") && !loginEmail.includes("@")) {
+      // Handle Parent/Teacher/Student usernames (Name or Mobile Number)
+      if ((role === "parent" || role === "teacher" || role === "student") && !loginEmail.includes("@")) {
         // Sanitize username for virtual email
         const sanitizedUsername = loginEmail.toLowerCase().replace(/[^a-z0-9]/g, '_');
         loginEmail = `${sanitizedUsername}@${selectedSchool}.${role}.com`;
@@ -147,8 +162,9 @@ export default function Login() {
           return;
         }
         
-        // If school admin, check if school is active
-        if (profile.role === "school" && profile.schoolId) {
+        // If school staff, check if school is active
+        const staffRoles = ["school", "admin", "registrar", "librarian", "accountant", "clerk", "driver", "security", "warden", "coordinator", "receptionist", "teacher", "finance"];
+        if (staffRoles.includes(profile.role) && profile.schoolId) {
           const schoolSnap = await getDoc(doc(db, "schools", profile.schoolId));
           if (schoolSnap.exists() && schoolSnap.data().status === "Suspended") {
             setError("Your school account is suspended. Please contact support.");
@@ -160,9 +176,24 @@ export default function Login() {
         
         switch (profile.role) {
           case "super": navigate("/super-admin"); break;
-          case "parent": navigate("/parent-portal"); break;
+          case "parent": 
+          case "student":
+            navigate("/parent-portal"); 
+            break;
           case "teacher": navigate("/teacher-dashboard"); break; 
-          case "school": navigate("/admin"); break;
+          case "school": 
+          case "admin":
+          case "registrar":
+          case "librarian":
+          case "accountant":
+          case "clerk":
+          case "driver":
+          case "security":
+          case "warden":
+          case "coordinator":
+          case "receptionist":
+            navigate("/admin"); 
+            break;
           case "finance": navigate("/finance-dashboard"); break;
         }
       } else if (role === "super" && user.email === "ernestvdavid@gmail.com") {
@@ -305,7 +336,7 @@ export default function Login() {
         </div>
 
         <div className="flex gap-2 overflow-x-auto rounded-xl bg-slate-100 p-1 no-scrollbar">
-          {(["school", "finance", "teacher", "parent", "super"] as const).map((r) => (
+          {(["school", "finance", "teacher", "parent", "student", "super", "admin", "registrar", "librarian", "accountant", "clerk", "driver", "security", "warden", "coordinator", "receptionist"] as const).map((r) => (
             <button
               key={r}
               onClick={() => setRole(r)}
@@ -333,7 +364,7 @@ export default function Login() {
 
         <form className="mt-8 space-y-6" onSubmit={handleLogin}>
           <div className="space-y-4">
-            {(role === "teacher" || role === "parent") && (
+            {(role === "teacher" || role === "parent" || role === "student") && (
               <div className="space-y-2">
                 <div className="relative">
                   <School className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
@@ -351,11 +382,11 @@ export default function Login() {
                 </div>
                 <div className="rounded-xl bg-emerald-50 p-3 text-[10px] font-medium text-emerald-700 space-y-1">
                   <p className="font-bold uppercase tracking-wider">Login Instructions:</p>
-                  {role === "parent" ? (
+                  {role === "parent" || role === "student" ? (
                     <>
-                      <p>• Select your child's school above.</p>
-                      <p>• Use child's <span className="font-bold">Roll Number</span> as username.</p>
-                      <p>• Default Password: <span className="font-bold">Parent@123</span></p>
+                      <p>• Select your school above.</p>
+                      <p>• Use your <span className="font-bold">Roll Number</span> or Username.</p>
+                      <p>• Default Password: <span className="font-bold">{role === "parent" ? "Parent@123" : "Student@123"}</span></p>
                     </>
                   ) : (
                     <>
@@ -375,7 +406,7 @@ export default function Login() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="block w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-3 text-sm placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-                placeholder={role === "parent" ? "Roll Number or Username" : role === "teacher" ? "Username or Email" : "Email address"}
+                placeholder={role === "parent" || role === "student" ? "Roll Number or Username" : role === "teacher" ? "Username or Email" : "Email address"}
               />
             </div>
             <div className="relative">

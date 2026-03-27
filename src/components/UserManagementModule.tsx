@@ -7,7 +7,22 @@ import { createUserWithEmailAndPassword, signOut } from "firebase/auth";
 import { logAction } from "../services/auditService";
 import { getSecondaryAuth } from "../lib/authUtils";
 
-const roles = ["admin", "registrar", "librarian", "finance", "teacher", "parent"];
+const roles = [
+  "admin", 
+  "registrar", 
+  "librarian", 
+  "finance", 
+  "teacher", 
+  "parent",
+  "student",
+  "accountant",
+  "clerk",
+  "driver",
+  "security",
+  "warden",
+  "coordinator",
+  "receptionist"
+];
 
 interface StaffUser {
   id: string;
@@ -57,9 +72,9 @@ export default function UserManagementModule({ schoolId }: { schoolId?: string }
     if (!schoolId) return;
     setIsAdding(true);
     try {
-      // For Parent/Teacher, we might use a username instead of email
+      // For Parent/Teacher/Student, we might use a username instead of email
       let loginEmail = newStaff.email.trim();
-      if (newStaff.isUsername && (newStaff.role === "parent" || newStaff.role === "teacher")) {
+      if (newStaff.isUsername && (newStaff.role === "parent" || newStaff.role === "teacher" || newStaff.role === "student")) {
         const sanitizedUsername = loginEmail.toLowerCase().replace(/[^a-z0-9]/g, '_');
         loginEmail = `${sanitizedUsername}@${schoolId}.${newStaff.role}.com`;
       }
@@ -233,7 +248,7 @@ export default function UserManagementModule({ schoolId }: { schoolId?: string }
                   <label className="text-sm font-bold text-slate-700">
                     {newStaff.isUsername ? "Username / Mobile" : "Email Address"}
                   </label>
-                  {(newStaff.role === "parent" || newStaff.role === "teacher") && (
+                  {(newStaff.role === "parent" || newStaff.role === "teacher" || newStaff.role === "student") && (
                     <button
                       type="button"
                       onClick={() => setNewStaff({ ...newStaff, isUsername: !newStaff.isUsername })}

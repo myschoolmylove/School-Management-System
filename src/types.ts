@@ -21,7 +21,7 @@ export type Transaction = {
   category: string; // Fee, Salary, Rent, Utilities, etc.
 };
 
-export type UserRole = "super" | "school" | "teacher" | "parent" | "finance" | "registrar" | "librarian" | "admin";
+export type UserRole = "super" | "school" | "teacher" | "parent" | "finance" | "registrar" | "librarian" | "admin" | "accountant" | "clerk" | "driver" | "security" | "warden" | "coordinator" | "receptionist" | "student";
 
 export type UserProfile = {
   uid: string;
