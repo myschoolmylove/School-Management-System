@@ -89,7 +89,7 @@ export default function Login() {
       }
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "Failed to sign in with Google");
+      setError(`${err.message} (Current Domain: ${window.location.hostname})`);
     } finally {
       setIsGoogleLoading(false);
     }
