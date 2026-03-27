@@ -3,9 +3,9 @@ import { LayoutDashboard, Users, CreditCard, Calendar, BookOpen, Settings, Bell,
 import { cn } from "@/src/lib/utils";
 import { useAuth } from "../contexts/AuthContext";
 import { db, auth } from "../firebase";
-import { doc, onSnapshot, collection } from "firebase/firestore";
+import { doc, onSnapshot, collection, query, where } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import ClassModule from "@/src/components/ClassModule";
 import FinanceModule from "@/src/components/FinanceModule";
 import SchoolResultsModule from "@/src/components/SchoolResultsModule";
@@ -57,6 +57,12 @@ const sidebarItems = [
 export default function SchoolAdmin() {
   const { profile } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const urlSchoolId = searchParams.get("schoolId");
+  
+  // Determine which school to show
+  const schoolId = profile?.role === "super" && urlSchoolId ? urlSchoolId : profile?.schoolId;
+
   const [activeTab, setActiveTab] = useState("Overview");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [schoolStatus, setSchoolStatus] = useState<string>("Active");
@@ -76,17 +82,22 @@ export default function SchoolAdmin() {
       }
       
       // Admin check
-      if (profile && profile.role !== "admin" && profile.role !== "super") {
+      if (profile && profile.role !== "school" && profile.role !== "admin" && profile.role !== "super") {
         alert("Unauthorized access. Admin only.");
         navigate("/");
         return;
       }
     });
 
-    if (profile?.schoolId) {
-      const schoolId = profile.schoolId;
+    let unsubscribeSchool: () => void = () => {};
+    let unsubscribeStudents: () => void = () => {};
+    let unsubscribeTeachers: () => void = () => {};
+    let unsubscribeFees: () => void = () => {};
+    let unsubscribeNotices: () => void = () => {};
+    let unsubscribeAudit: () => void = () => {};
 
-      const unsubscribeSchool = onSnapshot(doc(db, "schools", schoolId), (doc) => {
+    if (schoolId) {
+      unsubscribeSchool = onSnapshot(doc(db, "schools", schoolId), (doc) => {
         if (doc.exists()) {
           const data = doc.data();
           setSchoolData(data);
@@ -96,19 +107,19 @@ export default function SchoolAdmin() {
         console.error("Error fetching school data:", err);
       });
 
-      const unsubscribeStudents = onSnapshot(collection(db, "schools", schoolId, "students"), (snapshot) => {
+      unsubscribeStudents = onSnapshot(collection(db, "schools", schoolId, "students"), (snapshot) => {
         setStudentCount(snapshot.size);
       }, (err) => {
         console.error("Error fetching student count:", err);
       });
 
-      const unsubscribeTeachers = onSnapshot(collection(db, "schools", schoolId, "teachers"), (snapshot) => {
+      unsubscribeTeachers = onSnapshot(collection(db, "schools", schoolId, "teachers"), (snapshot) => {
         setTeacherCount(snapshot.size);
       }, (err) => {
         console.error("Error fetching teacher count:", err);
       });
 
-      const unsubscribeFees = onSnapshot(collection(db, "schools", schoolId, "vouchers"), (snapshot) => {
+      unsubscribeFees = onSnapshot(collection(db, "schools", schoolId, "vouchers"), (snapshot) => {
         let total = 0;
         const dailyTrend = [0, 0, 0, 0, 0, 0, 0];
         const now = new Date();
@@ -135,7 +146,7 @@ export default function SchoolAdmin() {
         console.error("Error fetching fees:", err);
       });
 
-      const unsubscribeNotices = onSnapshot(collection(db, "schools", schoolId, "notices"), (snapshot) => {
+      unsubscribeNotices = onSnapshot(collection(db, "schools", schoolId, "notices"), (snapshot) => {
         const notices = snapshot.docs
           .map(doc => ({ id: doc.id, ...doc.data() }))
           .sort((a: any, b: any) => (b.date?.seconds || 0) - (a.date?.seconds || 0))
@@ -146,28 +157,27 @@ export default function SchoolAdmin() {
       });
 
       // Fetch WhatsApp alerts from audit logs
-      const unsubscribeAudit = onSnapshot(collection(db, "audit_logs"), (snapshot) => {
+      unsubscribeAudit = onSnapshot(query(collection(db, "audit_logs"), where("schoolId", "==", schoolId)), (snapshot) => {
         const count = snapshot.docs.filter(doc => {
           const data = doc.data();
-          return data.schoolId === schoolId && data.action?.toLowerCase().includes("whatsapp");
+          return data.action?.toLowerCase().includes("whatsapp");
         }).length;
         setWhatsappAlertsCount(count);
       }, (err) => {
         console.error("Error fetching audit logs:", err);
       });
-
-      return () => {
-        unsubscribeAuth();
-        unsubscribeSchool();
-        unsubscribeStudents();
-        unsubscribeTeachers();
-        unsubscribeFees();
-        unsubscribeNotices();
-        unsubscribeAudit();
-      };
     }
-    return () => unsubscribeAuth();
-  }, [profile?.schoolId]);
+
+    return () => {
+      unsubscribeAuth();
+      unsubscribeSchool();
+      unsubscribeStudents();
+      unsubscribeTeachers();
+      unsubscribeFees();
+      unsubscribeNotices();
+      unsubscribeAudit();
+    };
+  }, [profile, navigate, schoolId]);
 
   const currentPlan = schoolData?.plan || "Free";
   const isFreeTier = currentPlan === "Free";
@@ -274,47 +284,47 @@ export default function SchoolAdmin() {
           </div>
         );
       case "Teachers":
-        return <TeacherModule schoolId={profile?.schoolId} />;
+        return <TeacherModule schoolId={schoolId} />;
       case "Students":
-        return <StudentModule schoolId={profile?.schoolId} />;
+        return <StudentModule schoolId={schoolId} />;
       case "Attendance":
-        return <AttendanceModule schoolId={profile?.schoolId} />;
+        return <AttendanceModule schoolId={schoolId} />;
       case "Classes":
-        return <ClassModule schoolId={profile?.schoolId} />;
+        return <ClassModule schoolId={schoolId} />;
       case "Timetables":
-        return <TimetableModule schoolId={profile?.schoolId} />;
+        return <TimetableModule schoolId={schoolId} />;
       case "Finance":
-        return <FinanceModule schoolId={profile?.schoolId} />;
+        return <FinanceModule schoolId={schoolId} />;
       case "Results":
-        return <SchoolResultsModule schoolId={profile?.schoolId} initialTab="manage" />;
+        return <SchoolResultsModule schoolId={schoolId} initialTab="manage" />;
       case "Fees":
-        return <FeeModule schoolId={profile?.schoolId} />;
+        return <FeeModule schoolId={schoolId} />;
       case "User Roles":
-        return <UserManagementModule schoolId={profile?.schoolId} />;
+        return <UserManagementModule schoolId={schoolId} />;
       case "Audit Logs":
-        return <AuditLogModule schoolId={profile?.schoolId} />;
+        return <AuditLogModule schoolId={schoolId} />;
       case "Inventory":
-        return <InventoryModule schoolId={profile?.schoolId} />;
+        return <InventoryModule schoolId={schoolId} />;
       case "ID Cards":
-        return <IDCardModule schoolId={profile?.schoolId} />;
+        return <IDCardModule schoolId={schoolId} />;
       case "WhatsApp":
-        return <WhatsAppModule schoolId={profile?.schoolId} />;
+        return <WhatsAppModule schoolId={schoolId} />;
       case "Biometrics":
-        return <BiometricModule schoolId={profile?.schoolId} />;
+        return <BiometricModule schoolId={schoolId} />;
       case "Marks Entry":
-        return <SchoolResultsModule schoolId={profile?.schoolId} initialTab="entry" />;
+        return <SchoolResultsModule schoolId={schoolId} initialTab="entry" />;
       case "Gallery":
-        return <GalleryModule schoolId={profile?.schoolId} />;
+        return <GalleryModule schoolId={schoolId} />;
       case "Events":
-        return <EventsModule schoolId={profile?.schoolId} />;
+        return <EventsModule schoolId={schoolId} />;
       case "Admissions":
-        return <AdmissionsModule schoolId={profile?.schoolId} />;
+        return <AdmissionsModule schoolId={schoolId} />;
       case "Notices":
-        return <NoticesModule schoolId={profile?.schoolId} />;
+        return <NoticesModule schoolId={schoolId} />;
       case "AI Search":
         return <AISearchModule />;
       case "Settings":
-        return <SettingsModule schoolId={profile?.schoolId} />;
+        return <SettingsModule schoolId={schoolId} />;
       default:
         return (
           <div className="flex h-[60vh] flex-col items-center justify-center text-center">

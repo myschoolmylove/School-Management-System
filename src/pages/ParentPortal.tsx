@@ -325,7 +325,7 @@ export default function ParentPortal() {
     if (!profile?.schoolId || children.length === 0) return;
 
     const childNames = children.map(c => c.name.toLowerCase());
-    const unsubscribeAudit = onSnapshot(collection(db, "audit_logs"), (snapshot) => {
+    const unsubscribeAudit = onSnapshot(query(collection(db, "audit_logs"), where("schoolId", "==", profile.schoolId)), (snapshot) => {
       const logs = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .filter((log: any) => {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Search, Filter, UserPlus, Edit2, Trash2, MoreVertical, GraduationCap, CheckCircle, XCircle, X, Camera, Loader2 } from "lucide-react";
+import { Plus, Search, Filter, UserPlus, Edit2, Trash2, MoreVertical, GraduationCap, CheckCircle, XCircle, X, Camera, Loader2, KeyRound } from "lucide-react";
 import { cn } from "../lib/utils";
 import { db, auth } from "../firebase";
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, serverTimestamp, setDoc, getDocs, where } from "firebase/firestore";
@@ -16,6 +16,7 @@ interface Student {
   rollNo: string;
   fatherName: string;
   parentUsername: string;
+  parentUid?: string;
   status: "Active" | "Inactive";
   photoUrl?: string;
   phone?: string;
@@ -27,6 +28,8 @@ export default function StudentModule({ schoolId }: { schoolId?: string }) {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [resettingParent, setResettingParent] = useState<{ uid: string; name: string } | null>(null);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [formData, setFormData] = useState<Partial<Student>>({
     name: "",
@@ -272,6 +275,33 @@ export default function StudentModule({ schoolId }: { schoolId?: string }) {
     XLSX.writeFile(wb, "Student_Upload_Template.xlsx");
   };
 
+  const handleResetParentPassword = async (uid: string, studentName: string) => {
+    if (!uid) return;
+    setLoading(true);
+    try {
+      const response = await fetch("/api/admin/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uid, newPassword: "Parent@123" }),
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        alert(`Password for ${studentName}'s parent has been reset to: Parent@123`);
+        await logAction("Reset Parent Password", `${studentName}'s Parent (UID: ${uid})`, "other");
+      } else {
+        throw new Error(result.error || "Failed to reset password");
+      }
+    } catch (error: any) {
+      console.error("Error resetting password:", error);
+      alert("Error resetting password: " + error.message);
+    } finally {
+      setLoading(false);
+      setIsResetModalOpen(false);
+      setResettingParent(null);
+    }
+  };
+
   const handleDelete = async (id: string, name: string) => {
     if (!schoolId) return;
     if (window.confirm(`Are you sure you want to delete ${name}?`)) {
@@ -434,6 +464,20 @@ export default function StudentModule({ schoolId }: { schoolId?: string }) {
                       <div className="flex justify-end gap-2">
                         <button 
                           onClick={() => {
+                            if (s.parentUid) {
+                              setResettingParent({ uid: s.parentUid, name: s.name });
+                              setIsResetModalOpen(true);
+                            } else {
+                              alert("No parent account linked to this student.");
+                            }
+                          }}
+                          title="Reset Parent Password"
+                          className="rounded-lg p-2 text-slate-400 hover:bg-amber-50 hover:text-amber-600"
+                        >
+                          <KeyRound className="h-4 w-4" />
+                        </button>
+                        <button 
+                          onClick={() => {
                             setEditingStudent(s);
                             setFormData(s);
                             setIsModalOpen(true);
@@ -457,6 +501,42 @@ export default function StudentModule({ schoolId }: { schoolId?: string }) {
           )}
         </div>
       </div>
+
+      {/* Reset Password Confirmation Modal */}
+      {isResetModalOpen && resettingParent && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl">
+            <div className="mb-6 text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+                <KeyRound className="h-8 w-8" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900">Reset Parent Password?</h3>
+              <p className="mt-2 text-slate-500">
+                This will reset the password for <strong>{resettingParent.name}'s</strong> parent account to the default: <span className="font-mono font-bold text-slate-900">Parent@123</span>
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setIsResetModalOpen(false);
+                  setResettingParent(null);
+                }}
+                className="flex-1 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-bold text-slate-600 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleResetParentPassword(resettingParent.uid, resettingParent.name)}
+                disabled={loading}
+                className="flex-1 rounded-xl bg-amber-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-amber-600/20 hover:bg-amber-700 disabled:opacity-50"
+              >
+                {loading ? <Loader2 className="mx-auto h-5 w-5 animate-spin" /> : "Reset Password"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add/Edit Modal */}
       {isModalOpen && (

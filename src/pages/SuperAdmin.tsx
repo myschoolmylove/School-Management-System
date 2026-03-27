@@ -5,6 +5,7 @@ import { cn } from "@/src/lib/utils";
 import { db, auth } from "../firebase";
 import { collection, addDoc, getDocs, query, where, doc, updateDoc, setDoc, onSnapshot, orderBy, limit, deleteDoc } from "firebase/firestore";
 import { createUserWithEmailAndPassword, onAuthStateChanged, getAuth, signOut } from "firebase/auth";
+import { useNavigate } from "react-router-dom";
 import { initializeApp, getApp, getApps } from "firebase/app";
 import firebaseConfig from "../../firebase-applet-config.json";
 
@@ -22,6 +23,7 @@ const initialSchools = [
 ];
 
 export default function SuperAdmin() {
+  const navigate = useNavigate();
   const [schools, setSchools] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -690,6 +692,13 @@ export default function SuperAdmin() {
                           <td className="px-6 py-4 text-slate-600">{school.expiry}</td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-2">
+                              <button 
+                                onClick={() => navigate(`/admin?schoolId=${school.id}`)}
+                                className="rounded-lg border border-slate-200 p-2 text-slate-400 hover:bg-slate-50 hover:text-emerald-600"
+                                title="Open School Dashboard"
+                              >
+                                <ExternalLink className="h-4 w-4" />
+                              </button>
                               <button 
                                 onClick={() => handleToggleStatus(school.id, school.status)}
                                 className={cn(

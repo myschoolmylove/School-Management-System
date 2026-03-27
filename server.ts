@@ -3,8 +3,17 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
+import admin from "firebase-admin";
+import firebaseConfig from "./firebase-applet-config.json" with { type: "json" };
 
 dotenv.config();
+
+// Initialize Firebase Admin
+if (!admin.apps.length) {
+  admin.initializeApp({
+    projectId: firebaseConfig.projectId,
+  });
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -127,6 +136,28 @@ async function startServer() {
     }
 
     res.sendStatus(200);
+  });
+
+  // --- Admin API Endpoints ---
+
+  // Reset User Password (for Parents/Teachers)
+  app.post("/api/admin/reset-password", async (req, res) => {
+    const { uid, newPassword } = req.body;
+
+    if (!uid || !newPassword) {
+      return res.status(400).json({ success: false, error: "UID and new password are required" });
+    }
+
+    try {
+      await admin.auth().updateUser(uid, {
+        password: newPassword,
+      });
+      console.log(`[Admin API] Password reset successful for UID: ${uid}`);
+      res.json({ success: true, message: "Password reset successful" });
+    } catch (error: any) {
+      console.error(`[Admin API] Error resetting password for UID ${uid}:`, error);
+      res.status(500).json({ success: false, error: error.message || "Failed to reset password" });
+    }
   });
 
   // 3. Webhook Verification (Meta requires this)
