@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Shield, Users, CreditCard, CheckCircle, XCircle, Search, Filter, MoreVertical, Settings, LayoutDashboard, School, RefreshCw, Plus, X, FileText, GraduationCap, Menu } from "lucide-react";
+import { Shield, Users, CreditCard, CheckCircle, XCircle, Search, Filter, MoreVertical, Settings, LayoutDashboard, School, RefreshCw, Plus, X, FileText, GraduationCap, Menu, Copy, ExternalLink, Check } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/src/lib/utils";
 import { db, auth } from "../firebase";
@@ -28,6 +28,9 @@ export default function SuperAdmin() {
   const [activeTab, setActiveTab] = useState("Dashboard");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isWelcomeModalOpen, setIsWelcomeModalOpen] = useState(false);
+  const [createdSchoolData, setCreatedSchoolData] = useState<any>(null);
+  const [isCopied, setIsCopied] = useState(false);
   const [isEditLicenseModalOpen, setIsEditLicenseModalOpen] = useState(false);
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [editingSchool, setEditingSchool] = useState<any>(null);
@@ -179,9 +182,11 @@ export default function SuperAdmin() {
       // 4. Sign out the secondary app to avoid session issues
       await signOut(secondaryAuth);
 
+      const schoolData = { ...newSchool, id: schoolRef.id };
+      setCreatedSchoolData(schoolData);
       setIsAddModalOpen(false);
+      setIsWelcomeModalOpen(true);
       setNewSchool({ name: "", principal: "", email: "", password: "", plan: "Free", monthlyPrice: 0 });
-      alert("School and Admin account created successfully!");
     } catch (err: any) {
       console.error(err);
       alert("Failed to add school: " + (err.message || "Unknown error"));
@@ -387,23 +392,26 @@ export default function SuperAdmin() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700">Admin Email</label>
+                    <label className="block text-sm font-medium text-slate-700">Admin Email (Google Email Recommended)</label>
                     <input 
                       type="email" 
                       required
                       value={newSchool.email}
                       onChange={e => setNewSchool({...newSchool, email: e.target.value})}
                       className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      placeholder="e.g. principal@school.com"
                     />
+                    <p className="mt-1 text-[10px] text-slate-400 italic">If this is a Google account, the admin can sign in instantly using Google Login.</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700">Admin Password</label>
+                    <label className="block text-sm font-medium text-slate-700">Initial Password</label>
                     <input 
                       type="password" 
                       required
                       value={newSchool.password}
                       onChange={e => setNewSchool({...newSchool, password: e.target.value})}
                       className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      placeholder="e.g. School@123"
                     />
                   </div>
                   <div>
@@ -451,6 +459,76 @@ export default function SuperAdmin() {
                   )}
                 </form>
             </div>
+          </div>
+        )}
+
+        {/* Welcome Kit Modal */}
+        {isWelcomeModalOpen && createdSchoolData && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl"
+            >
+              <div className="bg-emerald-600 p-6 text-center text-white">
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/20">
+                  <CheckCircle className="h-10 w-10" />
+                </div>
+                <h3 className="text-2xl font-bold">School Registered!</h3>
+                <p className="mt-1 text-emerald-100">Welcome Kit for {createdSchoolData.name}</p>
+              </div>
+
+              <div className="p-8">
+                <div className="space-y-6">
+                  <div className="rounded-2xl bg-slate-50 p-6 space-y-4 border border-slate-100">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Login URL</p>
+                      <p className="mt-1 text-sm font-medium text-emerald-600 break-all">{window.location.origin}/login</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Admin Email</p>
+                        <p className="mt-1 text-sm font-bold text-slate-900">{createdSchoolData.email}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Initial Password</p>
+                        <p className="mt-1 text-sm font-bold text-slate-900">{createdSchoolData.password}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <button 
+                      onClick={() => {
+                        const text = `Welcome to our School Management System!\n\nYour school "${createdSchoolData.name}" has been registered.\n\nLogin URL: ${window.location.origin}/login\nEmail: ${createdSchoolData.email}\nPassword: ${createdSchoolData.password}\n\nYou can also sign in instantly using your Google account if this is a Google email.\n\nBest regards,\nSuper Admin`;
+                        navigator.clipboard.writeText(text);
+                        setIsCopied(true);
+                        setTimeout(() => setIsCopied(false), 2000);
+                      }}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 py-3 text-sm font-bold text-white transition-all hover:bg-slate-800"
+                    >
+                      {isCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      {isCopied ? "Copied to Clipboard" : "Copy Welcome Message"}
+                    </button>
+
+                    <a 
+                      href={`mailto:${createdSchoolData.email}?subject=Welcome to School Management System&body=Hello ${createdSchoolData.principal},%0D%0A%0D%0AYour school "${createdSchoolData.name}" has been registered on our platform.%0D%0A%0D%0ALogin URL: ${window.location.origin}/login%0D%0AEmail: ${createdSchoolData.email}%0D%0APassword: ${createdSchoolData.password}%0D%0A%0D%0AYou can also sign in instantly using your Google account if this is a Google email.%0D%0A%0D%0ABest regards,%0D%0ASuper Admin`}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 py-3 text-sm font-bold text-slate-700 transition-all hover:bg-slate-50"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      Send via Email Client
+                    </a>
+
+                    <button 
+                      onClick={() => setIsWelcomeModalOpen(false)}
+                      className="w-full py-2 text-sm font-medium text-slate-400 hover:text-slate-600"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
           </div>
         )}
 

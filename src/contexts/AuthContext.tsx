@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { auth, db } from '../firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { UserProfile } from '../types';
 
 interface AuthContextType {
@@ -25,9 +25,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (user) {
           const docRef = doc(db, 'users', user.uid);
           const docSnap = await getDoc(docRef);
+          
           if (docSnap.exists()) {
-            const data = docSnap.data() as UserProfile;
+            let data = docSnap.data() as UserProfile;
+            
+            // Bootstrap super admin if email matches
+            if (user.email === "ernestvdavid@gmail.com" && data.role !== "super") {
+              await setDoc(docRef, { role: "super" }, { merge: true });
+              data.role = "super";
+            }
+            
             setProfile({ ...data, uid: user.uid });
+          } else if (user.email === "ernestvdavid@gmail.com") {
+            // Create super admin profile if it doesn't exist
+            const newProfile: UserProfile = {
+              uid: user.uid,
+              email: user.email,
+              role: "super",
+              name: user.displayName || "Main Admin",
+              createdAt: new Date().toISOString()
+            };
+            await setDoc(docRef, newProfile);
+            setProfile(newProfile);
+          } else {
+            setProfile(null);
           }
         } else {
           setProfile(null);

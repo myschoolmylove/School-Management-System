@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Shield, Lock, Mail, ArrowRight, School } from "lucide-react";
+import { Shield, Lock, Mail, ArrowRight, School, Chrome } from "lucide-react";
 import { cn } from "../lib/utils";
 import { auth, db } from "../firebase";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { doc, getDoc, collection, getDocs, setDoc } from "firebase/firestore";
 import { UserProfile } from "../types";
 
@@ -14,6 +14,7 @@ export default function Login() {
   const [selectedSchool, setSelectedSchool] = useState("");
   const [schools, setSchools] = useState<{ id: string; name: string }[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isBootstrapping, setIsBootstrapping] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [success, setSuccess] = useState("");
@@ -35,6 +36,64 @@ export default function Login() {
     };
     fetchSchools();
   }, []);
+
+  const handleGoogleLogin = async () => {
+    setIsGoogleLoading(true);
+    setError("");
+    setSuccess("");
+    const provider = new GoogleAuthProvider();
+    
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      
+      const docRef = doc(db, 'users', user.uid);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        const profile = docSnap.data() as UserProfile;
+        
+        // If they are logging in with Google, we might want to update their role if they are the super admin
+        if (user.email === "ernestvdavid@gmail.com" && profile.role !== "super") {
+          await setDoc(docRef, { role: "super" }, { merge: true });
+          profile.role = "super";
+        }
+
+        switch (profile.role) {
+          case "super": navigate("/super-admin"); break;
+          case "parent": navigate("/parent-portal"); break;
+          case "teacher": navigate("/teacher-dashboard"); break; 
+          case "school": navigate("/admin"); break;
+          case "finance": navigate("/finance-dashboard"); break;
+          default: navigate("/");
+        }
+      } else {
+        // New user via Google
+        const isSuperAdmin = user.email === "ernestvdavid@gmail.com";
+        const newProfile: UserProfile = {
+          uid: user.uid,
+          email: user.email || "",
+          role: isSuperAdmin ? "super" : "parent", // Default to parent if not super admin
+          name: user.displayName || "New User",
+          createdAt: new Date().toISOString()
+        };
+        await setDoc(docRef, newProfile);
+        
+        if (isSuperAdmin) {
+          navigate("/super-admin");
+        } else {
+          // If not super admin, they might need to be assigned to a school
+          setSuccess("Account created! Please contact your school administrator to assign your role and school.");
+          navigate("/parent-portal"); // Default landing
+        }
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Failed to sign in with Google");
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -218,6 +277,31 @@ export default function Login() {
           </div>
           <h2 className="mt-6 text-3xl font-bold tracking-tight text-slate-900">Welcome Back</h2>
           <p className="mt-2 text-sm text-slate-500">Sign in to your school management account</p>
+        </div>
+
+        <div className="space-y-4">
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            disabled={isGoogleLoading}
+            className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-bold text-slate-700 transition-all hover:bg-slate-50 hover:border-emerald-200 shadow-sm disabled:opacity-50"
+          >
+            {isGoogleLoading ? (
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-emerald-600" />
+            ) : (
+              <Chrome className="h-5 w-5 text-emerald-600" />
+            )}
+            Sign in with Google
+          </button>
+
+          <div className="relative py-2">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-slate-100"></div>
+            </div>
+            <div className="relative flex justify-center text-[10px] font-bold uppercase tracking-widest">
+              <span className="bg-white px-4 text-slate-400">Or use credentials</span>
+            </div>
+          </div>
         </div>
 
         <div className="flex gap-2 overflow-x-auto rounded-xl bg-slate-100 p-1 no-scrollbar">
