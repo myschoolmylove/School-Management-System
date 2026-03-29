@@ -147,7 +147,7 @@ export default function Pricing() {
               </p>
             </div>
             <a 
-              href="mailto:ernestvdavid@gmail.com?subject=Enterprise License Inquiry&body=Hello, I would like to inquire about an Enterprise license for my school."
+              href="mailto:ernestvdavid@gmail.com,abes.gujranwala@gmail.com?subject=Enterprise License Inquiry&body=Hello, I would like to inquire about an Enterprise license for my school."
               className="whitespace-nowrap rounded-full bg-white px-8 py-4 text-lg font-bold text-emerald-900 shadow-xl transition-transform hover:scale-105 text-center"
             >
               Contact Sales

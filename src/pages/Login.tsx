@@ -54,7 +54,8 @@ export default function Login() {
         const profile = docSnap.data() as UserProfile;
         
         // If they are logging in with Google, we might want to update their role if they are the super admin
-        if (user.email === "ernestvdavid@gmail.com" && profile.role !== "super") {
+        const superAdminEmails = ["ernestvdavid@gmail.com", "abes.gujranwala@gmail.com"];
+        if (user.email && superAdminEmails.includes(user.email) && profile.role !== "super") {
           await setDoc(docRef, { role: "super" }, { merge: true });
           profile.role = "super";
         }
@@ -84,7 +85,8 @@ export default function Login() {
         }
       } else {
         // New user via Google
-        const isSuperAdmin = user.email === "ernestvdavid@gmail.com";
+        const superAdminEmails = ["ernestvdavid@gmail.com", "abes.gujranwala@gmail.com"];
+        const isSuperAdmin = user.email && superAdminEmails.includes(user.email);
         const newProfile: UserProfile = {
           uid: user.uid,
           email: user.email || "",
@@ -196,11 +198,11 @@ export default function Login() {
             break;
           case "finance": navigate("/finance-dashboard"); break;
         }
-      } else if (role === "super" && user.email === "ernestvdavid@gmail.com") {
+      } else if (role === "super" && user.email && ["ernestvdavid@gmail.com", "abes.gujranwala@gmail.com"].includes(user.email)) {
         // Auto-create super admin profile if missing
         const newProfile: UserProfile = {
           uid: user.uid,
-          email: user.email || "ernestvdavid@gmail.com",
+          email: user.email,
           role: "super",
           name: "Main Admin",
           createdAt: new Date().toISOString()
@@ -247,10 +249,15 @@ export default function Login() {
     setIsBootstrapping(true);
     setError("");
     setSuccess("");
-    const bootstrapEmail = "ernestvdavid@gmail.com";
-    const bootstrapPassword = "Admin@123";
+    const bootstrapEmail = email.trim() || "ernestvdavid@gmail.com";
+    const bootstrapPassword = password || "Admin@123";
     
     try {
+      // Check if it's one of the allowed super admins
+      const superAdminEmails = ["ernestvdavid@gmail.com", "abes.gujranwala@gmail.com"];
+      if (!superAdminEmails.includes(bootstrapEmail)) {
+        throw new Error("Only authorized emails can be bootstrapped as Super Admin.");
+      }
       // Try to create the user in Auth
       let uid = "";
       try {

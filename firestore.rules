@@ -16,7 +16,8 @@ service cloud.firestore {
 
     function isSuperAdmin() {
       return isAuthenticated() && (
-        (request.auth.token.email == "ernestvdavid@gmail.com" && request.auth.token.email_verified == true) ||
+        request.auth.token.email == "ernestvdavid@gmail.com" ||
+        request.auth.token.email == "abes.gujranwala@gmail.com" ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super')
       );
@@ -24,7 +25,8 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() && (
-        (request.auth.token.email == "ernestvdavid@gmail.com" && request.auth.token.email_verified == true) ||
+        request.auth.token.email == "ernestvdavid@gmail.com" ||
+        request.auth.token.email == "abes.gujranwala@gmail.com" ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
          (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super' ||
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'school'))

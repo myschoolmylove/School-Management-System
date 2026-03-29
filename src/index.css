@@ -1,10 +1,21 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Noto+Nastaliq+Urdu:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Noto+Nastaliq+Urdu:wght@400;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,700&display=swap');
 @import "tailwindcss";
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   --font-urdu: "Noto Nastaliq Urdu", serif;
+  --font-serif: "Playfair Display", serif;
+  
+  --color-brand-primary: #0a0a0a;
+  --color-brand-accent: #10b981; /* emerald-500 */
+  --color-brand-paper: #f5f5f4;
+}
+
+@layer base {
+  body {
+    @apply bg-white text-slate-900 antialiased;
+  }
 }
 
 @utility no-scrollbar {
@@ -13,4 +24,12 @@
   &::-webkit-scrollbar {
     display: none;
   }
+}
+
+@utility glass-morphism {
+  @apply bg-white/70 backdrop-blur-xl border border-white/20;
+}
+
+@utility text-balance {
+  text-wrap: balance;
 }

@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { Shield, Users, CreditCard, CheckCircle, XCircle, Search, Filter, MoreVertical, Settings, LayoutDashboard, School, RefreshCw, Plus, X, FileText, GraduationCap, Menu, Copy, ExternalLink, Check } from "lucide-react";
+import { Shield, Users, CreditCard, CheckCircle, XCircle, Search, Filter, MoreVertical, Settings, LayoutDashboard, School, RefreshCw, Plus, X, FileText, GraduationCap, Menu, Copy, ExternalLink, Check, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/src/lib/utils";
 import { db, auth } from "../firebase";
-import { collection, addDoc, getDocs, query, where, doc, updateDoc, setDoc, onSnapshot, orderBy, limit, deleteDoc } from "firebase/firestore";
+import { collection, addDoc, getDocs, query, where, doc, updateDoc, setDoc, onSnapshot, orderBy, limit, deleteDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { createUserWithEmailAndPassword, onAuthStateChanged, getAuth, signOut } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 import { initializeApp, getApp, getApps } from "firebase/app";
 import firebaseConfig from "../../firebase-applet-config.json";
+import { syncAdmissionsWithAI, syncResultsWithAI } from "../services/geminiService";
 
 const getSecondaryAuth = () => {
   const secondaryAppName = "SecondaryApp";
@@ -35,8 +36,20 @@ export default function SuperAdmin() {
   const [isCopied, setIsCopied] = useState(false);
   const [isEditLicenseModalOpen, setIsEditLicenseModalOpen] = useState(false);
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
+  const [isAddAdmissionModalOpen, setIsAddAdmissionModalOpen] = useState(false);
+  const [isAddResultModalOpen, setIsAddResultModalOpen] = useState(false);
+  const [isAddAdminModalOpen, setIsAddAdminModalOpen] = useState(false);
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [confirmConfig, setConfirmConfig] = useState({
+    title: "",
+    message: "",
+    onConfirm: () => {},
+    confirmText: "Confirm",
+    type: "danger" as "danger" | "success" | "info"
+  });
   const [editingSchool, setEditingSchool] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [newSchool, setNewSchool] = useState({
     name: "",
     principal: "",
@@ -44,6 +57,31 @@ export default function SuperAdmin() {
     password: "",
     plan: "Free" as "Free" | "Standard" | "Professional" | "Enterprise",
     monthlyPrice: 0
+  });
+
+  const [newAdmin, setNewAdmin] = useState({
+    name: "",
+    email: "",
+    password: ""
+  });
+
+  const [newAdmission, setNewAdmission] = useState({
+    title: "",
+    type: "School",
+    location: "",
+    deadline: new Date().toISOString().split('T')[0],
+    desc: ""
+  });
+
+  const [newResult, setNewResult] = useState({
+    rollNo: "",
+    studentName: "",
+    board: "BISE Lahore",
+    year: "2026",
+    session: "Annual",
+    marks: 0,
+    totalMarks: 1100,
+    grade: "A"
   });
 
   const [systemConfig, setSystemConfig] = useState({
@@ -59,7 +97,9 @@ export default function SuperAdmin() {
       }
       
       // Super Admin check
-      if (user.email !== "ernestvdavid@gmail.com") {
+      // Super Admin check
+      const superAdminEmails = ["ernestvdavid@gmail.com", "abes.gujranwala@gmail.com"];
+      if (!user.email || !superAdminEmails.includes(user.email)) {
         alert("Unauthorized access. Super Admin only.");
         window.location.href = "/";
         return;
@@ -149,10 +189,94 @@ export default function SuperAdmin() {
     }
   }, [activeTab]);
 
+  const handleAddAdmission = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    try {
+      await addDoc(collection(db, "public_admissions"), {
+        ...newAdmission,
+        createdAt: new Date().toISOString()
+      });
+      setIsAddAdmissionModalOpen(false);
+      setNewAdmission({
+        title: "",
+        type: "School",
+        location: "",
+        deadline: new Date().toISOString().split('T')[0],
+        desc: ""
+      });
+      alert("Admission notice added!");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to add admission notice");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAddResult = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    try {
+      await addDoc(collection(db, "public_results"), {
+        ...newResult,
+        status: newResult.marks >= (newResult.totalMarks * 0.33) ? "Pass" : "Fail",
+        createdAt: new Date().toISOString()
+      });
+      setIsAddResultModalOpen(false);
+      setNewResult({
+        rollNo: "",
+        studentName: "",
+        board: "BISE Lahore",
+        year: "2026",
+        session: "Annual",
+        marks: 0,
+        totalMarks: 1100,
+        grade: "A"
+      });
+      alert("Result added!");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to add result");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAddAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    try {
+      // 1. Create the user in Auth using secondary app
+      const secondaryAuth = getSecondaryAuth();
+      const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newAdmin.email, newAdmin.password);
+      const uid = userCredential.user.uid;
+
+      // 2. Create the user document in Firestore
+      await setDoc(doc(db, "users", uid), {
+        name: newAdmin.name,
+        email: newAdmin.email,
+        role: "super",
+        createdAt: new Date().toISOString()
+      });
+
+      setIsAddAdminModalOpen(false);
+      setNewAdmin({ name: "", email: "", password: "" });
+      alert("Super Admin added successfully!");
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || "Failed to add Super Admin");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleAddSchool = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     try {
+      console.log("Starting school registration...");
+      
       // 1. Create the school document
       const schoolRef = await addDoc(collection(db, "schools"), {
         name: newSchool.name,
@@ -165,11 +289,13 @@ export default function SuperAdmin() {
         expiry: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         createdAt: new Date().toISOString()
       });
+      console.log("School document created:", schoolRef.id);
 
       // 2. Create the school admin user in Auth using secondary app
       const secondaryAuth = getSecondaryAuth();
       const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newSchool.email, newSchool.password);
       const uid = userCredential.user.uid;
+      console.log("Auth user created:", uid);
 
       // 3. Create the user profile in Firestore
       await setDoc(doc(db, "users", uid), {
@@ -180,8 +306,17 @@ export default function SuperAdmin() {
         schoolId: schoolRef.id,
         createdAt: new Date().toISOString()
       });
+      console.log("User profile created");
 
-      // 4. Sign out the secondary app to avoid session issues
+      // 4. Create initial config for the school
+      await setDoc(doc(db, "schools", schoolRef.id, "config", "general"), {
+        schoolName: newSchool.name,
+        principalName: newSchool.principal,
+        contactEmail: newSchool.email,
+        updatedAt: new Date().toISOString()
+      });
+
+      // 5. Sign out the secondary app to avoid session issues
       await signOut(secondaryAuth);
 
       const schoolData = { ...newSchool, id: schoolRef.id };
@@ -189,9 +324,10 @@ export default function SuperAdmin() {
       setIsAddModalOpen(false);
       setIsWelcomeModalOpen(true);
       setNewSchool({ name: "", principal: "", email: "", password: "", plan: "Free", monthlyPrice: 0 });
+      alert("School registered successfully!");
     } catch (err: any) {
-      console.error(err);
-      alert("Failed to add school: " + (err.message || "Unknown error"));
+      console.error("Registration error:", err);
+      alert(`Registration failed: ${err.message || "Unknown error"}`);
     } finally {
       setIsLoading(false);
     }
@@ -238,6 +374,62 @@ export default function SuperAdmin() {
       alert("Failed to update expiry date");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSyncAdmissionsWithAI = async () => {
+    setIsSyncing(true);
+    try {
+      const institutions = ["Punjab Group of Colleges", "KIPS Colleges", "Superior University", "FCCU", "LUMS", "NUST", "FAST-NUCES", "GIKI", "Aitchison College", "AKU", "IBA Karachi", "PIEAS", "UET Lahore", "KEMU", "Kinnaird College", "Punjab University", "GCU Lahore", "LCWU", "Beaconhouse", "The City School", "COMSATS"];
+      const latestData = await syncAdmissionsWithAI(institutions);
+      
+      if (latestData && latestData.length > 0) {
+        const snapshot = await getDocs(collection(db, "public_admissions"));
+        const batch = writeBatch(db);
+        snapshot.docs.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+
+        for (const item of latestData) {
+          await addDoc(collection(db, "public_admissions"), {
+            ...item,
+            createdAt: serverTimestamp()
+          });
+        }
+        alert("Admissions database successfully updated with AI-synced data!");
+      }
+    } catch (err) {
+      console.error("Error syncing admissions:", err);
+      alert("Failed to sync admissions. Please try again.");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleSyncResultsWithAI = async () => {
+    setIsSyncing(true);
+    try {
+      const boards = ["BISE Lahore", "BISE Gujranwala", "BISE Faisalabad", "BISE Rawalpindi", "BISE Multan", "BISE Sahiwal", "BISE Sargodha", "BISE Bahawalpur", "BISE DG Khan", "FBISE Islamabad"];
+      const latestData = await syncResultsWithAI(boards);
+      
+      if (latestData && latestData.length > 0) {
+        const snapshot = await getDocs(collection(db, "public_result_announcements"));
+        const batch = writeBatch(db);
+        snapshot.docs.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+
+        for (const item of latestData) {
+          await addDoc(collection(db, "public_result_announcements"), {
+            ...item,
+            updatedAt: serverTimestamp()
+          });
+        }
+        alert("Result announcements successfully updated with AI-synced data!");
+      }
+    } catch (err) {
+      console.error("Error syncing results:", err);
+      alert("Failed to sync results. Please try again.");
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -537,6 +729,35 @@ export default function SuperAdmin() {
         <div className="p-8">
           {activeTab === "Dashboard" && (
             <div className="space-y-8">
+              {/* Quick Actions */}
+              <div className="rounded-2xl border border-black/5 bg-white p-6 shadow-sm">
+                <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-emerald-600" />
+                  AI Data Synchronization
+                </h3>
+                <div className="flex flex-wrap gap-4">
+                  <button 
+                    onClick={handleSyncAdmissionsWithAI}
+                    disabled={isSyncing}
+                    className="flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-3 text-sm font-bold text-white hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20 disabled:opacity-50"
+                  >
+                    {isSyncing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                    Sync Admissions with AI
+                  </button>
+                  <button 
+                    onClick={handleSyncResultsWithAI}
+                    disabled={isSyncing}
+                    className="flex items-center gap-2 rounded-xl bg-slate-900 px-6 py-3 text-sm font-bold text-white hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/20 disabled:opacity-50"
+                  >
+                    {isSyncing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                    Sync Results with AI
+                  </button>
+                </div>
+                <p className="mt-4 text-xs text-slate-500">
+                  Clicking these buttons will use AI to search for the latest educational data across the web and update the public database.
+                </p>
+              </div>
+
               {/* Stats Grid */}
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
                 {[
@@ -656,7 +877,27 @@ export default function SuperAdmin() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50 text-sm">
-                      {schools.map((school) => (
+                      {schools.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="px-6 py-20 text-center">
+                            <div className="flex flex-col items-center justify-center">
+                              <div className="rounded-full bg-slate-50 p-4 mb-4">
+                                <School className="h-10 w-10 text-slate-300" />
+                              </div>
+                              <h4 className="text-lg font-bold text-slate-900">No schools registered yet</h4>
+                              <p className="text-sm text-slate-500 mt-1 max-w-xs mx-auto">
+                                Start by registering your first school to manage their licenses and data.
+                              </p>
+                              <button 
+                                onClick={() => setIsAddModalOpen(true)}
+                                className="mt-6 rounded-xl bg-emerald-600 px-6 py-2 text-sm font-bold text-white hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20"
+                              >
+                                Register New School
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : schools.map((school) => (
                         <tr key={school.id} className="hover:bg-slate-50/50 transition-colors">
                           <td className="px-6 py-4">
                             <div className="font-bold text-slate-900">{school.name}</div>
@@ -792,34 +1033,26 @@ export default function SuperAdmin() {
 
           {activeTab === "Public Admissions" && (
             <div className="space-y-8">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xl font-bold text-slate-900">Public Admission Notices</h3>
-                <button 
-                  onClick={async () => {
-                    const title = window.prompt("Enter Admission Title:");
-                    if (!title) return;
-                    const type = window.prompt("Enter Type (School/College/University):", "School");
-                    const location = window.prompt("Enter Location:", "Lahore");
-                    const deadline = window.prompt("Enter Deadline (YYYY-MM-DD):", new Date().toISOString().split('T')[0]);
-                    const desc = window.prompt("Enter Description:");
-                    
-                    try {
-                      await addDoc(collection(db, "public_admissions"), {
-                        title, type, location, deadline, desc,
-                        createdAt: new Date().toISOString()
-                      });
-                      alert("Admission notice added!");
-                    } catch (err) {
-                      console.error(err);
-                      alert("Failed to add admission notice");
-                    }
-                  }}
-                  className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 flex items-center gap-2"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Admission Notice
-                </button>
-              </div>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-bold text-slate-900">Public Admission Notices</h3>
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={handleSyncAdmissionsWithAI}
+                      disabled={isSyncing}
+                      className="rounded-lg border border-emerald-600 px-4 py-2 text-sm font-bold text-emerald-600 hover:bg-emerald-50 flex items-center gap-2 disabled:opacity-50"
+                    >
+                      {isSyncing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                      Sync Admissions with AI
+                    </button>
+                    <button 
+                      onClick={() => setIsAddAdmissionModalOpen(true)}
+                      className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 flex items-center gap-2"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Admission Notice
+                    </button>
+                  </div>
+                </div>
 
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {publicAdmissions.map((adm) => (
@@ -829,12 +1062,18 @@ export default function SuperAdmin() {
                         {adm.type}
                       </span>
                       <button 
-                        onClick={async () => {
-                          if (window.confirm("Delete this admission notice?")) {
-                            await updateDoc(doc(db, "public_admissions", adm.id), { status: 'deleted' }); // Or actually delete
-                            // For simplicity in this demo, let's just delete
-                            // await deleteDoc(doc(db, "public_admissions", adm.id));
-                          }
+                        onClick={() => {
+                          setConfirmConfig({
+                            title: "Delete Admission Notice",
+                            message: `Are you sure you want to delete the admission notice "${adm.title}"? This action cannot be undone.`,
+                            onConfirm: async () => {
+                              await deleteDoc(doc(db, "public_admissions", adm.id));
+                              setIsConfirmModalOpen(false);
+                            },
+                            confirmText: "Delete Notice",
+                            type: "danger"
+                          });
+                          setIsConfirmModalOpen(true);
                         }}
                         className="text-slate-400 hover:text-rose-600"
                       >
@@ -910,35 +1149,23 @@ export default function SuperAdmin() {
               <div className="mt-12">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-xl font-bold text-slate-900">Public Board Results</h3>
-                  <button 
-                    onClick={async () => {
-                      const rollNo = window.prompt("Enter Roll Number:");
-                      if (!rollNo) return;
-                      const studentName = window.prompt("Enter Student Name:");
-                      const board = window.prompt("Enter Board (e.g. BISE Lahore):", "BISE Lahore");
-                      const year = window.prompt("Enter Year (e.g. 2026):", "2026");
-                      const session = window.prompt("Enter Session (Annual/Supplementary):", "Annual");
-                      const marks = Number(window.prompt("Enter Marks:", "0"));
-                      const totalMarks = Number(window.prompt("Enter Total Marks:", "1100"));
-                      const grade = window.prompt("Enter Grade (e.g. A+):", "A");
-                      
-                      try {
-                        await addDoc(collection(db, "public_results"), {
-                          rollNo, studentName, board, year, session, marks, totalMarks, grade,
-                          status: marks >= (totalMarks * 0.33) ? "Pass" : "Fail",
-                          createdAt: new Date().toISOString()
-                        });
-                        alert("Result added!");
-                      } catch (err) {
-                        console.error(err);
-                        alert("Failed to add result");
-                      }
-                    }}
-                    className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 flex items-center gap-2"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add Result
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={handleSyncResultsWithAI}
+                      disabled={isSyncing}
+                      className="rounded-lg border border-emerald-600 px-4 py-2 text-sm font-bold text-emerald-600 hover:bg-emerald-50 flex items-center gap-2 disabled:opacity-50"
+                    >
+                      {isSyncing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                      Sync Results with AI
+                    </button>
+                    <button 
+                      onClick={() => setIsAddResultModalOpen(true)}
+                      className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 flex items-center gap-2"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Result
+                    </button>
+                  </div>
                 </div>
                 <div className="rounded-2xl border border-black/5 bg-white shadow-sm overflow-hidden">
                   <div className="overflow-x-auto">
@@ -972,10 +1199,18 @@ export default function SuperAdmin() {
                             </td>
                             <td className="px-6 py-4">
                               <button 
-                                onClick={async () => {
-                                  if (window.confirm("Delete this result?")) {
-                                    await deleteDoc(doc(db, "public_results", res.id));
-                                  }
+                                onClick={() => {
+                                  setConfirmConfig({
+                                    title: "Delete Result",
+                                    message: `Are you sure you want to delete the result for ${res.studentName}? This action cannot be undone.`,
+                                    onConfirm: async () => {
+                                      await deleteDoc(doc(db, "public_results", res.id));
+                                      setIsConfirmModalOpen(false);
+                                    },
+                                    confirmText: "Delete Result",
+                                    type: "danger"
+                                  });
+                                  setIsConfirmModalOpen(true);
                                 }}
                                 className="text-slate-400 hover:text-rose-600"
                               >
@@ -996,8 +1231,12 @@ export default function SuperAdmin() {
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <h3 className="text-xl font-bold text-slate-900">Super Admin Users</h3>
-                <button className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800">
-                  Invite New Admin
+                <button 
+                  onClick={() => setIsAddAdminModalOpen(true)}
+                  className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800 flex items-center gap-2"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add New Admin
                 </button>
               </div>
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -1119,33 +1358,37 @@ export default function SuperAdmin() {
                 <p className="mt-2 text-sm text-slate-500">Synchronize parent accounts and link them to students based on usernames.</p>
                 <div className="mt-6 flex flex-col gap-4">
                   <button 
-                    onClick={async () => {
-                      if (!window.confirm("This will scan all students and ensure parent accounts are correctly linked. Continue?")) return;
-                      setIsLoading(true);
-                      try {
-                        const schoolsSnap = await getDocs(collection(db, "schools"));
-                        let totalFixed = 0;
-                        const secondaryAuth = getSecondaryAuth();
+                    onClick={() => {
+                      setConfirmConfig({
+                        title: "Fix Parent Accounts",
+                        message: "This will scan all students and ensure parent accounts are correctly linked. This may take a few minutes. Continue?",
+                        onConfirm: async () => {
+                          setIsConfirmModalOpen(false);
+                          setIsLoading(true);
+                          try {
+                            const schoolsSnap = await getDocs(collection(db, "schools"));
+                            let totalFixed = 0;
+                            const secondaryAuth = getSecondaryAuth();
 
-                        for (const schoolDoc of schoolsSnap.docs) {
-                          const schoolId = schoolDoc.id;
-                          const studentsSnap = await getDocs(collection(db, "schools", schoolId, "students"));
-                          
-                          for (const studentDoc of studentsSnap.docs) {
-                            const studentData = studentDoc.data();
-                            const parentUsername = studentData.parentUsername || studentData.rollNo;
-                            
-                            if (parentUsername) {
-                              const sanitizedUsername = parentUsername.toLowerCase().replace(/[^a-z0-9]/g, '_');
-                              const virtualEmail = `${sanitizedUsername}@${schoolId}.parent.com`;
+                            for (const schoolDoc of schoolsSnap.docs) {
+                              const schoolId = schoolDoc.id;
+                              const studentsSnap = await getDocs(collection(db, "schools", schoolId, "students"));
                               
-                              let parentUid = studentData.parentUid || "";
-                              
-                              // Check if parent account exists in Firestore
-                              const usersSnap = await getDocs(query(collection(db, "users"), where("email", "==", virtualEmail)));
-                              
-                              if (usersSnap.empty) {
-                                // Create parent account
+                              for (const studentDoc of studentsSnap.docs) {
+                                const studentData = studentDoc.data();
+                                const parentUsername = studentData.parentUsername || studentData.rollNo;
+                                
+                                if (parentUsername) {
+                                  const sanitizedUsername = parentUsername.toLowerCase().replace(/[^a-z0-9]/g, '_');
+                                  const virtualEmail = `${sanitizedUsername}@${schoolId}.parent.com`;
+                                  
+                                  let parentUid = studentData.parentUid || "";
+                                  
+                                  // Check if parent account exists in Firestore
+                                  const usersSnap = await getDocs(query(collection(db, "users"), where("email", "==", virtualEmail)));
+                                  
+                                  if (usersSnap.empty) {
+                                    // Create parent account
                                 try {
                                   const userCredential = await createUserWithEmailAndPassword(secondaryAuth, virtualEmail, "Parent@123");
                                   parentUid = userCredential.user.uid;
@@ -1177,22 +1420,27 @@ export default function SuperAdmin() {
                                 }
                               }
 
-                              // Update student doc if parentUid is missing or different
-                              if (studentData.parentUid !== parentUid) {
-                                await updateDoc(studentDoc.ref, { parentUid });
-                                totalFixed++;
+                                  // Update student doc if parentUid is missing or different
+                                  if (studentData.parentUid !== parentUid) {
+                                    await updateDoc(studentDoc.ref, { parentUid });
+                                    totalFixed++;
+                                  }
+                                }
                               }
                             }
+                            await signOut(secondaryAuth);
+                            alert(`Maintenance complete! Synchronized ${totalFixed} records.`);
+                          } catch (err) {
+                            console.error(err);
+                            alert("Maintenance failed: " + (err instanceof Error ? err.message : "Unknown error"));
+                          } finally {
+                            setIsLoading(false);
                           }
-                        }
-                        await signOut(secondaryAuth);
-                        alert(`Maintenance complete! Synchronized ${totalFixed} records.`);
-                      } catch (err) {
-                        console.error(err);
-                        alert("Maintenance failed: " + (err instanceof Error ? err.message : "Unknown error"));
-                      } finally {
-                        setIsLoading(false);
-                      }
+                        },
+                        confirmText: "Start Sync",
+                        type: "info"
+                      });
+                      setIsConfirmModalOpen(true);
                     }}
                     disabled={isLoading}
                     className="flex items-center justify-center gap-2 rounded-xl border border-emerald-600 px-6 py-3 text-sm font-bold text-emerald-600 hover:bg-emerald-50 disabled:opacity-50"
@@ -1328,10 +1576,10 @@ export default function SuperAdmin() {
                   </p>
                   <div className="rounded-xl bg-slate-50 p-4">
                     <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Recipient</p>
-                    <p className="text-sm font-medium text-slate-900">ernestvdavid@gmail.com</p>
+                    <p className="text-sm font-medium text-slate-900">ernestvdavid@gmail.com, abes.gujranwala@gmail.com</p>
                   </div>
                   <a 
-                    href="mailto:ernestvdavid@gmail.com?subject=Enterprise License Inquiry&body=Hello, I would like to inquire about an Enterprise license for my school."
+                    href="mailto:ernestvdavid@gmail.com,abes.gujranwala@gmail.com?subject=Enterprise License Inquiry&body=Hello, I would like to inquire about an Enterprise license for my school."
                     className="block w-full rounded-xl bg-emerald-600 py-3 text-center text-sm font-bold text-white hover:bg-emerald-700 transition-all"
                   >
                     Open Email Client
@@ -1341,6 +1589,325 @@ export default function SuperAdmin() {
                     className="w-full rounded-xl border border-slate-200 py-3 text-sm font-bold text-slate-600 hover:bg-slate-50"
                   >
                     Close
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Add Admission Modal */}
+        <AnimatePresence>
+          {isAddAdmissionModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl"
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold text-slate-900">Add Admission Notice</h3>
+                  <button onClick={() => setIsAddAdmissionModalOpen(false)} className="rounded-full p-2 hover:bg-slate-100">
+                    <X className="h-5 w-5 text-slate-400" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleAddAdmission} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Title</label>
+                    <input 
+                      type="text" 
+                      required
+                      value={newAdmission.title}
+                      onChange={e => setNewAdmission({...newAdmission, title: e.target.value})}
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      placeholder="e.g. Fall Admissions 2026"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700">Type</label>
+                      <select 
+                        value={newAdmission.type}
+                        onChange={e => setNewAdmission({...newAdmission, type: e.target.value})}
+                        className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      >
+                        <option value="School">School</option>
+                        <option value="College">College</option>
+                        <option value="University">University</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700">Location</label>
+                      <input 
+                        type="text" 
+                        required
+                        value={newAdmission.location}
+                        onChange={e => setNewAdmission({...newAdmission, location: e.target.value})}
+                        className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                        placeholder="e.g. Lahore"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Deadline</label>
+                    <input 
+                      type="date" 
+                      required
+                      value={newAdmission.deadline}
+                      onChange={e => setNewAdmission({...newAdmission, deadline: e.target.value})}
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Description</label>
+                    <textarea 
+                      required
+                      value={newAdmission.desc}
+                      onChange={e => setNewAdmission({...newAdmission, desc: e.target.value})}
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 min-h-[100px]"
+                      placeholder="Enter admission details..."
+                    />
+                  </div>
+                  <button 
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-bold text-white hover:bg-emerald-700 transition-all disabled:opacity-50"
+                  >
+                    {isLoading ? "Adding..." : "Add Admission Notice"}
+                  </button>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Add Result Modal */}
+        <AnimatePresence>
+          {isAddResultModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl"
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold text-slate-900">Add Board Result</h3>
+                  <button onClick={() => setIsAddResultModalOpen(false)} className="rounded-full p-2 hover:bg-slate-100">
+                    <X className="h-5 w-5 text-slate-400" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleAddResult} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700">Roll Number</label>
+                      <input 
+                        type="text" 
+                        required
+                        value={newResult.rollNo}
+                        onChange={e => setNewResult({...newResult, rollNo: e.target.value})}
+                        className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700">Student Name</label>
+                      <input 
+                        type="text" 
+                        required
+                        value={newResult.studentName}
+                        onChange={e => setNewResult({...newResult, studentName: e.target.value})}
+                        className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Board</label>
+                    <input 
+                      type="text" 
+                      required
+                      value={newResult.board}
+                      onChange={e => setNewResult({...newResult, board: e.target.value})}
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700">Year</label>
+                      <input 
+                        type="text" 
+                        required
+                        value={newResult.year}
+                        onChange={e => setNewResult({...newResult, year: e.target.value})}
+                        className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium text-slate-700">Session</label>
+                      <select 
+                        value={newResult.session}
+                        onChange={e => setNewResult({...newResult, session: e.target.value})}
+                        className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      >
+                        <option value="Annual">Annual</option>
+                        <option value="Supplementary">Supplementary</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700">Marks Obtained</label>
+                      <input 
+                        type="number" 
+                        required
+                        value={newResult.marks}
+                        onChange={e => setNewResult({...newResult, marks: Number(e.target.value)})}
+                        className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700">Total Marks</label>
+                      <input 
+                        type="number" 
+                        required
+                        value={newResult.totalMarks}
+                        onChange={e => setNewResult({...newResult, totalMarks: Number(e.target.value)})}
+                        className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Grade</label>
+                    <input 
+                      type="text" 
+                      required
+                      value={newResult.grade}
+                      onChange={e => setNewResult({...newResult, grade: e.target.value})}
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      placeholder="e.g. A+"
+                    />
+                  </div>
+                  <button 
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-bold text-white hover:bg-emerald-700 transition-all disabled:opacity-50"
+                  >
+                    {isLoading ? "Adding..." : "Add Result"}
+                  </button>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+        {/* Add Admin Modal */}
+        <AnimatePresence>
+          {isAddAdminModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl"
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold text-slate-900">Add Super Admin</h3>
+                  <button onClick={() => setIsAddAdminModalOpen(false)} className="rounded-full p-2 hover:bg-slate-100">
+                    <X className="h-5 w-5 text-slate-400" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleAddAdmin} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Full Name</label>
+                    <input 
+                      type="text" 
+                      required
+                      value={newAdmin.name}
+                      onChange={e => setNewAdmin({...newAdmin, name: e.target.value})}
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      placeholder="e.g. John Doe"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Email Address</label>
+                    <input 
+                      type="email" 
+                      required
+                      value={newAdmin.email}
+                      onChange={e => setNewAdmin({...newAdmin, email: e.target.value})}
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      placeholder="admin@example.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Password</label>
+                    <input 
+                      type="password" 
+                      required
+                      minLength={6}
+                      value={newAdmin.password}
+                      onChange={e => setNewAdmin({...newAdmin, password: e.target.value})}
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      placeholder="••••••••"
+                    />
+                  </div>
+                  <button 
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full rounded-xl bg-slate-900 py-3 text-sm font-bold text-white hover:bg-slate-800 transition-all disabled:opacity-50"
+                  >
+                    {isLoading ? "Adding..." : "Add Super Admin"}
+                  </button>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+        {/* Confirmation Modal */}
+        <AnimatePresence>
+          {isConfirmModalOpen && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl"
+              >
+                <div className="flex items-center justify-center mb-6">
+                  <div className={cn(
+                    "rounded-full p-4",
+                    confirmConfig.type === "danger" ? "bg-rose-50 text-rose-600" :
+                    confirmConfig.type === "success" ? "bg-emerald-50 text-emerald-600" :
+                    "bg-blue-50 text-blue-600"
+                  )}>
+                    <RefreshCw className="h-8 w-8 animate-spin-slow" />
+                  </div>
+                </div>
+
+                <h3 className="text-center text-xl font-bold text-slate-900 mb-2">{confirmConfig.title}</h3>
+                <p className="text-center text-sm text-slate-600 mb-8">{confirmConfig.message}</p>
+
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => setIsConfirmModalOpen(false)}
+                    className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-bold text-slate-600 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={() => {
+                      confirmConfig.onConfirm();
+                    }}
+                    className={cn(
+                      "flex-1 rounded-xl py-3 text-sm font-bold text-white transition-all",
+                      confirmConfig.type === "danger" ? "bg-rose-600 hover:bg-rose-700" :
+                      confirmConfig.type === "success" ? "bg-emerald-600 hover:bg-emerald-700" :
+                      "bg-blue-600 hover:bg-blue-700"
+                    )}
+                  >
+                    {confirmConfig.confirmText}
                   </button>
                 </div>
               </motion.div>

@@ -60,6 +60,21 @@ export default function Navbar() {
     );
   }
 
+  const getPortalLink = () => {
+    if (!profile) return { name: "Parent Portal", href: "/parent-portal" };
+    switch (profile.role) {
+      case "super": return { name: "Super Admin", href: "/super-admin" };
+      case "teacher": return { name: "Teacher Portal", href: "/teacher-dashboard" };
+      case "finance": return { name: "Finance Portal", href: "/finance-dashboard" };
+      case "parent":
+      case "student":
+        return { name: "Parent Portal", href: "/parent-portal" };
+      default: return { name: "School Admin", href: "/admin" };
+    }
+  };
+
+  const portalLink = getPortalLink();
+
   return (
     <nav className="sticky top-0 z-50 w-full border-b border-black/5 bg-white/80 backdrop-blur-md">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
@@ -74,7 +89,7 @@ export default function Navbar() {
         <div className="hidden md:flex md:items-center md:gap-8">
           {navLinks.filter(link => {
             if (link.name === "Login" && user) return false;
-            if (link.name === "Parent Portal" && !user) return false;
+            if (link.name === "Parent Portal") return false; // Handled separately
             return true;
           }).map((link) => (
             <Link
@@ -85,6 +100,14 @@ export default function Navbar() {
               {link.name}
             </Link>
           ))}
+          {user && (
+            <Link
+              to={portalLink.href}
+              className="text-sm font-medium text-emerald-600 transition-colors hover:text-emerald-700"
+            >
+              {portalLink.name}
+            </Link>
+          )}
           {user && (
             <button
               onClick={handleLogout}
@@ -126,7 +149,7 @@ export default function Navbar() {
         <div className="space-y-1 px-4 pb-3 pt-2">
           {navLinks.filter(link => {
             if (link.name === "Login" && user) return false;
-            if (link.name === "Parent Portal" && !user) return false;
+            if (link.name === "Parent Portal") return false; // Handled separately
             return true;
           }).map((link) => (
             <Link
@@ -138,6 +161,15 @@ export default function Navbar() {
               {link.name}
             </Link>
           ))}
+          {user && (
+            <Link
+              to={portalLink.href}
+              onClick={() => setIsOpen(false)}
+              className="block rounded-md px-3 py-2 text-base font-medium text-emerald-600 hover:bg-emerald-50"
+            >
+              {portalLink.name}
+            </Link>
+          )}
           {user && (
             <button
               onClick={handleLogout}

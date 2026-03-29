@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { Search, GraduationCap, School, MessageCircle, BookOpen, Trophy, Bell, Calendar, Image as ImageIcon, ArrowRight } from "lucide-react";
+import { GraduationCap, School, MessageCircle, BookOpen, Trophy, Bell, Calendar, Image as ImageIcon, ArrowRight, MapPin, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/src/lib/utils";
 
@@ -17,101 +17,173 @@ export default function Home() {
         <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold border-2 border-white">1</span>
       </a>
 
-      {/* Hero Section */}
-      <section className="relative overflow-hidden bg-slate-900 py-24 text-white sm:py-32">
-        <div className="absolute inset-0 z-0 opacity-20">
-          <img 
-            src="https://picsum.photos/seed/education/1920/1080" 
-            alt="Education Background" 
-            className="h-full w-full object-cover"
-            referrerPolicy="no-referrer"
-          />
-          <div className="absolute inset-0 bg-gradient-to-r from-slate-900 to-transparent" />
-        </div>
-        
-        <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      {/* Hero Section - Split Layout */}
+      <section className="relative min-h-[90vh] flex flex-col lg:flex-row overflow-hidden bg-white">
+        <div className="flex-1 flex flex-col justify-center px-6 sm:px-12 lg:px-24 py-20 relative z-10">
           <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="max-w-2xl"
+            initial={{ opacity: 0, x: -30 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+            className="max-w-xl"
           >
-            <h1 className="text-4xl font-extrabold tracking-tight sm:text-6xl">
-              Empowering Pakistan's <span className="text-emerald-400">Education Ecosystem</span>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 text-emerald-600 text-xs font-bold tracking-widest uppercase mb-8">
+              <Sparkles className="h-3 w-3" />
+              Pakistan's #1 Education Portal
+            </div>
+            <h1 className="text-5xl sm:text-7xl font-bold tracking-tight text-slate-900 leading-[0.9] mb-8">
+              Empowering <br />
+              <span className="text-emerald-500 italic font-serif font-normal">Future</span> <br />
+              Generations.
             </h1>
-            <p className="mt-6 text-lg text-slate-300">
-              Your one-stop portal for board results, admissions, scholarships, and professional school management. 
-              Connecting students, parents, and schools across Pakistan.
+            <p className="text-lg text-slate-500 leading-relaxed mb-10 text-balance">
+              Your comprehensive gateway for board results, admissions, scholarships, and professional school management. 
+              Connecting millions of students across Pakistan.
             </p>
-            <div className="mt-10 flex flex-wrap gap-4">
+            <div className="flex flex-wrap gap-4">
               <Link
                 to="/results"
-                className="rounded-full bg-emerald-500 px-8 py-3 text-base font-semibold text-white shadow-lg transition-transform hover:scale-105 active:scale-95"
+                className="group relative inline-flex items-center gap-2 rounded-full bg-slate-900 px-8 py-4 text-base font-bold text-white transition-all hover:bg-slate-800 hover:scale-105 active:scale-95"
               >
                 Check Results
+                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
               </Link>
               <Link
                 to="/admissions"
-                className="rounded-full bg-white/10 px-8 py-3 text-base font-semibold text-white backdrop-blur-sm transition-colors hover:bg-white/20"
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-8 py-4 text-base font-bold text-slate-900 transition-all hover:bg-slate-50 hover:border-slate-300"
               >
-                Admissions
+                Explore Admissions
               </Link>
-              <Link
-                to="/pricing"
-                className="rounded-full bg-white/10 px-8 py-3 text-base font-semibold text-white backdrop-blur-sm transition-colors hover:bg-white/20"
-              >
-                Pricing
-              </Link>
-              <Link
-                to="/login"
-                className="rounded-full bg-white/10 px-8 py-3 text-base font-semibold text-white backdrop-blur-sm transition-colors hover:bg-white/20"
-              >
-                Login
-              </Link>
+            </div>
+            
+            <div className="mt-16 flex items-center gap-8 pt-8 border-t border-slate-100">
+              <div>
+                <div className="text-2xl font-bold text-slate-900">500+</div>
+                <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">Schools</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-slate-900">1M+</div>
+                <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">Students</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-slate-900">24/7</div>
+                <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">Support</div>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+        
+        <div className="flex-1 relative min-h-[400px] lg:min-h-0 bg-slate-100 overflow-hidden">
+          <motion.div
+            initial={{ opacity: 0, scale: 1.1 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 1.2 }}
+            className="absolute inset-0"
+          >
+            <img 
+              src="https://picsum.photos/seed/pakistan-edu/1200/1600" 
+              alt="Education in Pakistan" 
+              className="h-full w-full object-cover grayscale-[0.2] hover:grayscale-0 transition-all duration-700"
+              referrerPolicy="no-referrer"
+            />
+            <div className="absolute inset-0 bg-gradient-to-r from-white via-white/20 to-transparent lg:from-white lg:via-transparent" />
+          </motion.div>
+          
+          {/* Floating Elements */}
+          <motion.div 
+            animate={{ y: [0, -20, 0] }}
+            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute top-20 right-20 glass-morphism p-6 rounded-3xl shadow-2xl hidden lg:block"
+          >
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-2xl bg-emerald-500 flex items-center justify-center text-white">
+                <Trophy className="h-6 w-6" />
+              </div>
+              <div>
+                <div className="text-sm font-bold text-slate-900">Latest Result</div>
+                <div className="text-xs text-slate-500">BISE Lahore Inter Part 2</div>
+              </div>
+            </div>
+          </motion.div>
+          
+          <motion.div 
+            animate={{ y: [0, 20, 0] }}
+            transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+            className="absolute bottom-20 left-20 glass-morphism p-6 rounded-3xl shadow-2xl hidden lg:block"
+          >
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-2xl bg-blue-500 flex items-center justify-center text-white">
+                <Bell className="h-6 w-6" />
+              </div>
+              <div>
+                <div className="text-sm font-bold text-slate-900">Admissions Open</div>
+                <div className="text-xs text-slate-500">LUMS Fall 2026</div>
+              </div>
             </div>
           </motion.div>
         </div>
       </section>
 
-      {/* Quick Links / Search */}
-      <section className="mx-auto -mt-16 w-full max-w-5xl px-4 sm:px-6 lg:px-8">
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="rounded-[2.5rem] bg-white p-2 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.14)] ring-1 ring-black/5"
-        >
-          <div className="flex flex-col gap-2 p-2 md:flex-row md:items-center">
-            <div className="relative flex-1">
-              <Search className="absolute left-6 top-1/2 h-6 w-6 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                id="search"
-                placeholder="Search board results, schools, or scholarships..."
-                className="h-20 w-full rounded-[2rem] border-none bg-slate-50 pl-16 pr-36 text-xl text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all"
-              />
-              <button className="absolute right-3 top-1/2 -translate-y-1/2 rounded-[1.5rem] bg-emerald-500 px-8 py-4 text-base font-bold text-white shadow-xl shadow-emerald-500/20 transition-all hover:bg-emerald-600 hover:scale-[1.02] active:scale-95">
-                Search
-              </button>
+      {/* Top Universities Section - Refined Grid */}
+      <section className="py-24 bg-white">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col md:flex-row md:items-end justify-between mb-16 gap-6">
+            <div className="max-w-2xl">
+              <h2 className="text-4xl font-bold tracking-tight text-slate-900 mb-4 font-serif italic">Premier Institutions</h2>
+              <p className="text-lg text-slate-500">Explore the most renowned educational institutions in Pakistan, from historic colleges to modern research universities.</p>
             </div>
+            <Link
+              to="/admissions"
+              className="inline-flex items-center gap-2 text-sm font-bold text-slate-900 group"
+            >
+              View all institutions
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+            </Link>
           </div>
-          <div className="flex items-center gap-6 px-10 py-5">
-            <span className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Trending
-            </span>
-            <div className="flex gap-3 overflow-x-auto no-scrollbar">
-              {["Matric", "Inter", "Scholarships", "Admissions"].map((tag) => (
-                <button 
-                  key={tag}
-                  className="whitespace-nowrap rounded-full border border-slate-100 bg-white px-5 py-2 text-xs font-bold text-slate-600 transition-all hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 hover:shadow-sm"
-                >
-                  {tag}
-                </button>
-              ))}
-            </div>
+          
+          <div className="grid grid-cols-1 gap-12 md:grid-cols-2 lg:grid-cols-3">
+            {[
+              { name: "LUMS", location: "Lahore", type: "University", image: "https://picsum.photos/seed/lums-campus/800/1000", desc: "Excellence in business and social sciences." },
+              { name: "NUST", location: "Islamabad", type: "University", image: "https://picsum.photos/seed/nust-campus/800/1000", desc: "Pakistan's leading engineering university." },
+              { name: "IBA", location: "Karachi", type: "University", image: "https://picsum.photos/seed/iba-campus/800/1000", desc: "Premier business school in the heart of Karachi." },
+            ].map((uni, idx) => (
+              <motion.div
+                key={uni.name}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: idx * 0.1, duration: 0.6 }}
+                className="group cursor-pointer"
+              >
+                <div className="relative aspect-[3/4] overflow-hidden rounded-[2rem] mb-6 shadow-sm group-hover:shadow-2xl transition-all duration-500">
+                  <img 
+                    src={uni.image} 
+                    alt={uni.name} 
+                    className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex flex-col justify-end p-8">
+                    <p className="text-white/80 text-sm mb-2">{uni.desc}</p>
+                    <Link to={`/admissions?q=${uni.name}`} className="text-white font-bold flex items-center gap-2">
+                      Apply Now <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </div>
+                  <div className="absolute top-6 left-6">
+                    <span className="glass-morphism px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.2em] text-slate-900">
+                      {uni.type}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-2xl font-bold text-slate-900 group-hover:text-emerald-600 transition-colors">{uni.name}</h3>
+                  <div className="flex items-center gap-1 text-xs font-bold text-slate-400 uppercase tracking-widest">
+                    <MapPin className="h-3 w-3" />
+                    {uni.location}
+                  </div>
+                </div>
+              </motion.div>
+            ))}
           </div>
-        </motion.div>
+        </div>
       </section>
 
       {/* Features Grid */}

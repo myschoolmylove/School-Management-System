@@ -30,13 +30,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             let data = docSnap.data() as UserProfile;
             
             // Bootstrap super admin if email matches
-            if (user.email === "ernestvdavid@gmail.com" && data.role !== "super") {
+            const superAdminEmails = ["ernestvdavid@gmail.com", "abes.gujranwala@gmail.com"];
+            if (user.email && superAdminEmails.includes(user.email) && data.role !== "super") {
               await setDoc(docRef, { role: "super" }, { merge: true });
               data.role = "super";
             }
             
             setProfile({ ...data, uid: user.uid });
-          } else if (user.email === "ernestvdavid@gmail.com") {
+          } else if (user.email && ["ernestvdavid@gmail.com", "abes.gujranwala@gmail.com"].includes(user.email)) {
             // Create super admin profile if it doesn't exist
             const newProfile: UserProfile = {
               uid: user.uid,
