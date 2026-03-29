@@ -764,7 +764,7 @@ export default function SuperAdmin() {
                   { label: "Total Schools", value: schools.length.toString(), change: "+4", icon: School, color: "text-blue-600 bg-blue-50" },
                   { label: "Total Students", value: schools.reduce((acc, s) => acc + s.students, 0).toLocaleString(), change: "+1.2k", icon: Users, color: "text-emerald-600 bg-emerald-50" },
                   { label: "Active Licenses", value: schools.filter(s => s.status === "Active").length.toString(), change: "+2", icon: CheckCircle, color: "text-purple-600 bg-purple-50" },
-                  { label: "Monthly Revenue", value: "Rs 1.2M", change: "+15%", icon: CreditCard, color: "text-orange-600 bg-orange-50" },
+                  { label: "Monthly Revenue", value: `Rs ${(schools.reduce((acc, s) => acc + (s.monthlyPrice || 0), 0) / 1000000).toFixed(2)}M`, change: "+15%", icon: CreditCard, color: "text-orange-600 bg-orange-50" },
                 ].map((stat) => (
                   <div key={stat.label} className="rounded-2xl border border-black/5 bg-white p-6 shadow-sm">
                     <div className="flex items-center justify-between">
@@ -809,9 +809,22 @@ export default function SuperAdmin() {
                   <h3 className="text-lg font-bold text-slate-900">System Alerts</h3>
                   <div className="mt-6 space-y-4">
                     {[
-                      { title: "License Expiry", desc: "4 schools expiring in 7 days", type: "warning" },
+                      { 
+                        title: "License Expiry", 
+                        desc: `${schools.filter(s => {
+                          if (!s.expiry) return false;
+                          const expiryDate = new Date(s.expiry);
+                          const diff = expiryDate.getTime() - new Date().getTime();
+                          return diff > 0 && diff < (7 * 24 * 60 * 60 * 1000);
+                        }).length} schools expiring in 7 days`, 
+                        type: "warning" 
+                      },
                       { title: "Server Load", desc: "Normal - 24% capacity", type: "info" },
-                      { title: "Pending Approvals", desc: "2 new schools waiting", type: "action" },
+                      { 
+                        title: "Pending Approvals", 
+                        desc: `${schools.filter(s => s.status === "Pending").length} new schools waiting`, 
+                        type: "action" 
+                      },
                     ].map((alert, i) => (
                       <div key={i} className="rounded-xl bg-slate-50 p-4">
                         <p className="text-sm font-bold text-slate-900">{alert.title}</p>

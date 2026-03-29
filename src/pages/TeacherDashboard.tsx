@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   LayoutDashboard, 
   Users, 
@@ -12,15 +12,88 @@ import {
   Plus, 
   Upload, 
   GraduationCap,
-  Calendar
+  Calendar,
+  Menu,
+  X
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import AttendanceModule from "../components/AttendanceModule";
 import * as XLSX from 'xlsx';
+import { useAuth } from "../contexts/AuthContext";
+import { db } from "../firebase";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { motion, AnimatePresence } from "motion/react";
 
 export default function TeacherDashboard() {
+  const { profile } = useAuth();
   const [activeTab, setActiveTab] = useState("Overview");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
+  const [studentCount, setStudentCount] = useState(0);
+  const [homeworkCount, setHomeworkCount] = useState(0);
+  const [attendanceRate, setAttendanceRate] = useState(0);
+  const [schedule, setSchedule] = useState<any[]>([]);
+  const [homework, setHomework] = useState<any[]>([]);
+  const [notices, setNotices] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!profile?.schoolId) return;
+
+    // Fetch students for teacher's class if assigned
+    const teacherClass = profile.classId || "";
+    if (teacherClass) {
+      const qStudents = query(
+        collection(db, "schools", profile.schoolId, "students"),
+        where("class", "==", teacherClass)
+      );
+      const unsubStudents = onSnapshot(qStudents, (snapshot) => {
+        setStudentCount(snapshot.size);
+      });
+
+      const qHomework = query(
+        collection(db, "schools", profile.schoolId, "homework"),
+        where("classId", "==", teacherClass)
+      );
+      const unsubHomework = onSnapshot(qHomework, (snapshot) => {
+        setHomeworkCount(snapshot.size);
+        setHomework(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      });
+
+      const qTimetable = query(
+        collection(db, "schools", profile.schoolId, "timetables"),
+        where("classId", "==", teacherClass)
+      );
+      const unsubTimetable = onSnapshot(qTimetable, (snapshot) => {
+        // Filter for today's schedule if possible, or just show all for the class
+        const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+        const today = days[new Date().getDay()];
+        const todaySchedule = snapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .filter((s: any) => s.day === today)
+          .sort((a: any, b: any) => a.startTime?.localeCompare(b.startTime));
+        setSchedule(todaySchedule);
+      });
+
+      return () => {
+        unsubStudents();
+        unsubHomework();
+        unsubTimetable();
+      };
+    }
+  }, [profile]);
+
+  useEffect(() => {
+    if (!profile?.schoolId) return;
+    const qNotices = query(
+      collection(db, "schools", profile.schoolId, "events"),
+      where("type", "==", "Notice")
+    );
+    const unsubNotices = onSnapshot(qNotices, (snapshot) => {
+      setNotices(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).slice(0, 5));
+    });
+    return () => unsubNotices();
+  }, [profile]);
 
   const sidebarItems = [
     { name: "Overview", icon: LayoutDashboard },
@@ -55,8 +128,8 @@ export default function TeacherDashboard() {
           <div className="space-y-8">
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {[
-                { label: "My Students", value: "42", icon: Users, color: "text-blue-600 bg-blue-50" },
-                { label: "Pending Homework", value: "3", icon: BookOpen, color: "text-amber-600 bg-amber-50" },
+                { label: "My Students", value: studentCount.toString(), icon: Users, color: "text-blue-600 bg-blue-50" },
+                { label: "Pending Homework", value: homeworkCount.toString(), icon: BookOpen, color: "text-amber-600 bg-amber-50" },
                 { label: "Attendance Today", value: "98%", icon: CheckCircle, color: "text-emerald-600 bg-emerald-50" },
               ].map((stat) => (
                 <div key={stat.label} className="rounded-2xl border border-black/5 bg-white p-6 shadow-sm">
@@ -70,21 +143,19 @@ export default function TeacherDashboard() {
             </div>
 
             <div className="rounded-2xl border border-black/5 bg-white p-6 shadow-sm">
-              <h3 className="text-lg font-bold text-slate-900">Today's Schedule</h3>
+              <h3 className="text-lg font-bold text-slate-900">Today's Schedule ({new Date().toLocaleDateString('en-US', { weekday: 'long' })})</h3>
               <div className="mt-6 space-y-4">
-                {[
-                  { time: "08:00 AM", subject: "Mathematics", class: "Grade 10-A" },
-                  { time: "10:30 AM", subject: "Physics", class: "Grade 9-B" },
-                  { time: "01:00 PM", subject: "Mathematics", class: "Grade 8-C" },
-                ].map((slot, i) => (
+                {schedule.length === 0 ? (
+                  <p className="text-sm text-slate-500 text-center py-4">No classes scheduled for today.</p>
+                ) : schedule.map((slot, i) => (
                   <div key={i} className="flex items-center gap-4 border-b border-slate-50 pb-4 last:border-0 last:pb-0">
-                    <div className="flex h-12 w-24 flex-col items-center justify-center rounded-xl bg-slate-50 text-slate-600">
+                    <div className="flex h-12 w-32 flex-col items-center justify-center rounded-xl bg-slate-50 text-slate-600">
                       <Clock className="h-4 w-4" />
-                      <span className="text-xs font-bold">{slot.time}</span>
+                      <span className="text-[10px] font-bold">{slot.startTime} - {slot.endTime}</span>
                     </div>
                     <div>
                       <p className="text-sm font-bold text-slate-900">{slot.subject}</p>
-                      <p className="text-xs text-slate-500">{slot.class}</p>
+                      <p className="text-xs text-slate-500">{slot.classId} - {slot.section || 'All'}</p>
                     </div>
                   </div>
                 ))}
@@ -93,7 +164,7 @@ export default function TeacherDashboard() {
           </div>
         );
       case "Attendance":
-        return <AttendanceModule />;
+        return <AttendanceModule schoolId={profile?.schoolId} />;
       case "Homework":
         return (
           <div className="space-y-6">
@@ -105,16 +176,16 @@ export default function TeacherDashboard() {
               </button>
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {[
-                { title: "Algebra Worksheet", class: "Grade 10-A", due: "2026-03-25" },
-                { title: "Physics Lab Report", class: "Grade 9-B", due: "2026-03-24" },
-              ].map((hw, i) => (
+              {homework.length === 0 ? (
+                <div className="col-span-2 py-12 text-center text-slate-400">No assignments found for your class.</div>
+              ) : homework.map((hw, i) => (
                 <div key={i} className="rounded-2xl border border-black/5 bg-white p-6 shadow-sm">
                   <div className="flex items-center justify-between">
                     <h4 className="font-bold text-slate-900">{hw.title}</h4>
-                    <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-600">{hw.class}</span>
+                    <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-600">{hw.classId}</span>
                   </div>
-                  <p className="mt-2 text-sm text-slate-500">Due Date: {hw.due}</p>
+                  <p className="mt-2 text-sm text-slate-500 line-clamp-2">{hw.description}</p>
+                  <p className="mt-2 text-xs font-bold text-slate-400 uppercase">Due Date: {hw.dueDate}</p>
                   <div className="mt-4 flex gap-2">
                     <button className="flex-1 rounded-lg bg-slate-50 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100">Edit</button>
                     <button className="flex-1 rounded-lg bg-rose-50 py-2 text-xs font-bold text-rose-600 hover:bg-rose-100">Delete</button>

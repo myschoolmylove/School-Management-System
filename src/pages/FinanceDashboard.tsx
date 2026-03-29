@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   CreditCard, 
   TrendingUp, 
@@ -11,19 +11,69 @@ import {
   Clock, 
   AlertCircle,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  Menu,
+  X
 } from "lucide-react";
 import { cn } from "../lib/utils";
-
-const transactions = [
-  { id: "TX-101", student: "Ali Khan", class: "10th-A", amount: "Rs 12,500", type: "Fee", status: "Paid", date: "2026-03-20" },
-  { id: "TX-102", student: "Sara Ahmed", class: "9th-B", amount: "Rs 8,000", type: "Admission", status: "Pending", date: "2026-03-21" },
-  { id: "TX-103", student: "Zain Malik", class: "8th-C", amount: "Rs 12,500", type: "Fee", status: "Paid", date: "2026-03-19" },
-  { id: "TX-104", student: "Fatima Noor", class: "10th-A", amount: "Rs 2,500", type: "Fine", status: "Overdue", date: "2026-03-15" },
-];
+import { useAuth } from "../contexts/AuthContext";
+import { db } from "../firebase";
+import { collection, query, where, onSnapshot, orderBy, limit } from "firebase/firestore";
 
 export default function FinanceDashboard() {
+  const { profile } = useAuth();
   const [activeTab, setActiveTab] = useState("Overview");
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
+  const [vouchers, setVouchers] = useState<any[]>([]);
+  const [stats, setStats] = useState({
+    totalRevenue: 0,
+    feesCollected: 0,
+    outstanding: 0,
+    overdue: 0
+  });
+
+  useEffect(() => {
+    if (!profile?.schoolId) return;
+
+    const qVouchers = query(
+      collection(db, "schools", profile.schoolId, "vouchers"),
+      orderBy("dueDate", "desc")
+    );
+
+    const unsub = onSnapshot(qVouchers, (snapshot) => {
+      const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setVouchers(docs);
+
+      const now = new Date();
+      let total = 0;
+      let collected = 0;
+      let outstanding = 0;
+      let overdue = 0;
+
+      docs.forEach((v: any) => {
+        const amount = Number(v.amount) || 0;
+        total += amount;
+        if (v.status === "Paid") {
+          collected += amount;
+        } else {
+          outstanding += amount;
+          if (v.dueDate && new Date(v.dueDate) < now) {
+            overdue += amount;
+          }
+        }
+      });
+
+      setStats({
+        totalRevenue: total,
+        feesCollected: collected,
+        outstanding,
+        overdue
+      });
+    });
+
+    return () => unsub();
+  }, [profile]);
 
   return (
     <div className="flex min-h-screen bg-slate-50">
@@ -77,10 +127,10 @@ export default function FinanceDashboard() {
         {/* Stats Grid */}
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {[
-            { label: "Total Revenue", value: "Rs 4.2M", trend: "+12%", up: true, icon: TrendingUp, color: "text-emerald-600 bg-emerald-50" },
-            { label: "Fees Collected", value: "Rs 3.8M", trend: "+8%", up: true, icon: CheckCircle, color: "text-blue-600 bg-blue-50" },
-            { label: "Outstanding", value: "Rs 450K", trend: "-5%", up: false, icon: Clock, color: "text-amber-600 bg-amber-50" },
-            { label: "Overdue Fees", value: "Rs 120K", trend: "+2%", up: true, icon: AlertCircle, color: "text-rose-600 bg-rose-50" },
+            { label: "Total Revenue", value: `Rs ${stats.totalRevenue.toLocaleString()}`, trend: "+12%", up: true, icon: TrendingUp, color: "text-emerald-600 bg-emerald-50" },
+            { label: "Fees Collected", value: `Rs ${stats.feesCollected.toLocaleString()}`, trend: "+8%", up: true, icon: CheckCircle, color: "text-blue-600 bg-blue-50" },
+            { label: "Outstanding", value: `Rs ${stats.outstanding.toLocaleString()}`, trend: "-5%", up: false, icon: Clock, color: "text-amber-600 bg-amber-50" },
+            { label: "Overdue Fees", value: `Rs ${stats.overdue.toLocaleString()}`, trend: "+2%", up: true, icon: AlertCircle, color: "text-rose-600 bg-rose-50" },
           ].map((stat) => (
             <div key={stat.label} className="rounded-2xl border border-black/5 bg-white p-6 shadow-sm">
               <div className="flex items-center justify-between">
@@ -132,12 +182,12 @@ export default function FinanceDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 text-sm">
-                {transactions.map((tx) => (
+                {vouchers.slice(0, 10).map((tx) => (
                   <tr key={tx.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-4 font-mono font-medium text-slate-900">{tx.id}</td>
-                    <td className="px-6 py-4 text-slate-900 font-medium">{tx.student}</td>
-                    <td className="px-6 py-4 text-slate-600">{tx.class}</td>
-                    <td className="px-6 py-4 font-bold text-slate-900">{tx.amount}</td>
+                    <td className="px-6 py-4 font-mono font-medium text-slate-900">{tx.id.slice(0, 8)}</td>
+                    <td className="px-6 py-4 text-slate-900 font-medium">{tx.studentName}</td>
+                    <td className="px-6 py-4 text-slate-600">{tx.classId}</td>
+                    <td className="px-6 py-4 font-bold text-slate-900">Rs {Number(tx.amount).toLocaleString()}</td>
                     <td className="px-6 py-4">
                       <span className={cn(
                         "rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider",
@@ -147,9 +197,14 @@ export default function FinanceDashboard() {
                         {tx.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-slate-500">{tx.date}</td>
+                    <td className="px-6 py-4 text-slate-500">{tx.dueDate}</td>
                   </tr>
                 ))}
+                {vouchers.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-12 text-center text-slate-400">No transactions found.</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
